@@ -7,6 +7,8 @@
 - [ ] Drafts: optional "follow draft updates" mode (Message-ID/content changes on each save) — YAGNI for now
 - [ ] `_objects` GC: walk stripped .eml stubs and remove unreferenced CAS objects (analogous to `git gc`)
 - [ ] v0.5 quote stripping: detect and collapse full-quote blocks; trigger via --reprocess. Design sketch in CLAUDE.md.
+- [ ] inbox/mail dedup: same CAS object symlinked from multiple messages currently produces multiple inbox/mail/YYYY/MM/<file> entries (one per message date); decide policy — keep one canonical link, or keep all and add backlinks
+- [ ] inbox/mail origin backlink: each inbox/mail/YYYY/MM/<file> symlink has no pointer back to the message(s) that produced it; consider a sidecar <file>.origin.json listing message paths and sha256
 - [ ] SHA-256 git repo support: auto-detect via `git rev-parse --show-object-format`; fall back to subprocess for source_blob
 - [ ] Attachment MIME type refinement: use python-magic for more accurate typing of synthesized filenames
 - [ ] Update installed plugin copy in ~/src/zkm/plugins/zkm-zkm-eml to v0.4
