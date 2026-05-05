@@ -1,0 +1,24 @@
+From: Corp <noreply@corp.example.com>
+To: Bob <bob@example.com>
+Subject: Newsletter with logo
+Message-ID: <with-inline-img-001@example.com>
+Date: Mon, 28 Apr 2026 14:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="boundary003"; type="text/html"
+
+--boundary003
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<img src="cid:logo001@corp.example.com" alt="Corp Logo">
+<p>Welcome to our newsletter!</p>
+</body></html>
+
+--boundary003
+Content-Type: image/png
+Content-ID: <logo001@corp.example.com>
+Content-Disposition: inline; filename="logo.png"
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+--boundary003--

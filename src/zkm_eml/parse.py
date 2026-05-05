@@ -6,12 +6,28 @@ import email
 import email.headerregistry
 import email.policy
 import hashlib
+import mimetypes
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+
+from .naming import sanitize_filename
+
+
+@dataclass
+class ParsedAttachment:
+    filename: str              # sanitized, collision-safe within the message
+    content_type: str          # e.g. "application/pdf"
+    content_id: str | None     # cid: reference if present
+    is_inline: bool            # Content-Disposition: inline
+    referenced_in_html: bool   # cid: appears inside html_body
+    size: int                  # decoded byte length
+    sha256: str                # sha256 of decoded payload
+    payload: bytes             # decoded content
+    part_index: int            # walk-order index for stub correlation
 
 
 @dataclass
@@ -30,6 +46,7 @@ class ParsedMessage:
     has_attachments: bool
     sha256: str              # sha256 of raw .eml bytes
     source_path: Path        # original file path
+    attachments: list[ParsedAttachment] = field(default_factory=list)
 
 
 def parse_eml(path: Path) -> ParsedMessage:
@@ -54,7 +71,12 @@ def parse_eml(path: Path) -> ParsedMessage:
     to_addrs = _format_addr_list(msg.get("To") or "")
     cc_addrs = _format_addr_list(msg.get("Cc") or "")
 
-    plain_body, html_body, has_attachments = _extract_bodies(msg)
+    plain_body, html_body, attachments = _extract_parts(msg)
+    # Mark which attachments are referenced by the HTML body (inline decoration)
+    for att in attachments:
+        if att.content_id:
+            cid_bare = att.content_id.strip("<>")
+            att.referenced_in_html = cid_bare in html_body or f"cid:{cid_bare}" in html_body
 
     return ParsedMessage(
         message_id=message_id,
@@ -68,9 +90,10 @@ def parse_eml(path: Path) -> ParsedMessage:
         cc_addrs=cc_addrs,
         plain_body=plain_body,
         html_body=html_body,
-        has_attachments=has_attachments,
+        has_attachments=bool(attachments),
         sha256=sha,
         source_path=path,
+        attachments=attachments,
     )
 
 
@@ -80,12 +103,10 @@ def parse_eml(path: Path) -> ParsedMessage:
 
 
 def _strip_angles(s: str) -> str:
-    """Remove surrounding angle brackets and whitespace from a Message-ID."""
     return s.strip().strip("<>").strip()
 
 
 def _synthetic_id(raw: bytes) -> str:
-    """Synthesize a stable Message-ID from header bytes when none is present."""
     return f"synthetic-{hashlib.sha256(raw[:4096]).hexdigest()[:32]}"
 
 
@@ -102,7 +123,6 @@ def _parse_date(date_str: str) -> datetime:
 
 
 def _format_addr(header_val: str) -> str:
-    """Return 'Display Name <addr@example.com>' or bare address."""
     if not header_val:
         return ""
     try:
@@ -111,14 +131,12 @@ def _format_addr(header_val: str) -> str:
             return f"{addr.display_name} <{addr.addr_spec}>"
         return addr.addr_spec
     except Exception:
-        # Fall back to raw value
         return header_val.strip()
 
 
 def _format_addr_list(header_val: str) -> list[str]:
     if not header_val:
         return []
-    # Split on comma, format each
     results = []
     for part in re.split(r",\s*", header_val.strip()):
         part = part.strip()
@@ -127,38 +145,85 @@ def _format_addr_list(header_val: str) -> list[str]:
     return results
 
 
-def _extract_bodies(msg: EmailMessage) -> tuple[str, str, bool]:
-    """Return (plain_text, html_text, has_attachments)."""
+_MULTIPART_TYPES = frozenset({
+    "multipart/alternative", "multipart/mixed",
+    "multipart/related", "multipart/signed",
+    "multipart/encrypted",
+})
+
+
+def _extract_parts(msg: EmailMessage) -> tuple[str, str, list[ParsedAttachment]]:
+    """Return (plain_text, html_text, attachments)."""
     plain_parts: list[str] = []
     html_parts: list[str] = []
-    has_attachments = False
+    attachments: list[ParsedAttachment] = []
+    seen_filenames: set[str] = set()
 
-    for part in msg.walk():
+    for idx, part in enumerate(msg.walk()):
         content_type = part.get_content_type()
         disposition = part.get_content_disposition() or ""
 
-        if disposition == "attachment":
-            has_attachments = True
+        if content_type in _MULTIPART_TYPES:
             continue
 
-        if content_type == "text/plain":
+        if content_type == "text/plain" and disposition != "attachment":
             payload = _decode_part(part)
             if payload:
                 plain_parts.append(payload)
-        elif content_type == "text/html":
+        elif content_type == "text/html" and disposition != "attachment":
             payload = _decode_part(part)
             if payload:
                 html_parts.append(payload)
-        elif content_type not in ("multipart/alternative", "multipart/mixed",
-                                  "multipart/related", "multipart/signed",
-                                  "multipart/encrypted"):
-            # Non-text, non-multipart, non-attachment → implicit attachment
-            if part.get_filename():
-                has_attachments = True
+        else:
+            raw_payload = part.get_payload(decode=True)
+            if not isinstance(raw_payload, bytes):
+                continue
+            if not raw_payload:
+                continue
+
+            raw_filename = part.get_filename() or ""
+            ext = mimetypes.guess_extension(content_type.split(";")[0].strip()) or ""
+            fallback = f"part-{idx}{ext}"
+            base_name = sanitize_filename(raw_filename, fallback)
+            # Collision-suffix within this message
+            filename = _unique_filename(base_name, seen_filenames)
+            seen_filenames.add(filename)
+
+            cid = (part.get("Content-Id") or "").strip().strip("<>") or None
+            is_inline = disposition == "inline"
+            sha = hashlib.sha256(raw_payload).hexdigest()
+
+            attachments.append(ParsedAttachment(
+                filename=filename,
+                content_type=content_type,
+                content_id=cid,
+                is_inline=is_inline,
+                referenced_in_html=False,  # filled in by caller
+                size=len(raw_payload),
+                sha256=sha,
+                payload=raw_payload,
+                part_index=idx,
+            ))
 
     plain = "\n\n".join(plain_parts).strip()
     html = "\n\n".join(html_parts).strip()
-    return plain, html, has_attachments
+    return plain, html, attachments
+
+
+def _unique_filename(name: str, seen: set[str]) -> str:
+    if name not in seen:
+        return name
+    stem, _, ext = name.rpartition(".")
+    if not stem:
+        stem, ext = name, ""
+    else:
+        ext = f".{ext}"
+    i = 1
+    while True:
+        candidate = f"{stem}_{i}{ext}"
+        if candidate not in seen:
+            return candidate
+        i += 1
 
 
 def _decode_part(part: EmailMessage) -> str:

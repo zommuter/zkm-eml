@@ -1,21 +1,31 @@
 name: zkm-eml
-version: 0.1.0
-description: Convert .eml files (e.g. from mbsync Maildir) to markdown with thread modeling.
+version: 0.2.0
+description: Convert Maildir or .eml files to markdown with thread modeling and attachment extraction.
 
 creates_dirs:
   - mail/messages
   - mail/threads
   - originals/mail
+  - inbox
 
 config:
   EML_SOURCE_DIR:
-    required: true
-    description: Directory containing .eml files to import (scanned recursively). Point at mbsync's Maildir.
+    required: false
+    default: "~/mail"
+    description: Mail source. Maildir tree (mbsync) or flat .eml dump. Scanned recursively, read-only. Defaults to ~/mail.
+  EML_FOLDERS_EXCLUDE:
+    required: false
+    default: "Trash,Junk,Spam,Spamverdacht,Virusverdacht,Gelöscht,[Google Mail]/Trash,[Google Mail]/Spam,Drafts,Entwürfe"
+    description: Comma-separated folder name patterns to skip (case-insensitive, matched on any path segment). If empty, built-in defaults apply.
   EML_KEEP_ORIGINALS:
     required: false
     default: "true"
-    description: Copy each .eml into originals/mail/ for reproducibility and --reprocess support.
+    description: Store stripped .eml + detached attachments under originals/mail/ for --reprocess support.
   EML_OWNER_ADDRESSES:
     required: false
     default: ""
     description: Comma-separated list of the store owner's email addresses, used to determine direction (incoming/outgoing).
+  EML_ATTACHMENT_INBOX:
+    required: false
+    default: "true"
+    description: Symlink detached attachments into inbox/ so other plugins (zkm-pdf, zkm-photo, recursive zkm-eml) can pick them up.

@@ -34,7 +34,7 @@ def test_convert_basic(store: Path):
         assert "thread_id" in post.metadata
         assert "thread" in post.metadata
         assert "processor" in post.metadata
-        assert post.metadata["processor_version"] == "0.1.0"
+        assert post.metadata["processor_version"] == "0.2.0"
 
 
 def test_convert_idempotent(store: Path):

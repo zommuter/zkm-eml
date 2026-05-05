@@ -1,0 +1,20 @@
+From: Bob <bob@example.com>
+To: Carol <carol@example.com>
+Subject: Fwd: Invoice attached
+Message-ID: <with-pdf-fwd-001@example.com>
+Date: Tue, 29 Apr 2026 09:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="boundary002"
+
+--boundary002
+Content-Type: text/plain; charset=utf-8
+
+Forwarding the invoice for your records.
+
+--boundary002
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="invoice.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjAKJSVFT0YK
+--boundary002--

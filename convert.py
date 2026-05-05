@@ -13,18 +13,29 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from zkm_eml.frontmatter import write_message_md
+from zkm_eml.naming import slugify, unique_path
+from zkm_eml.originals import resolve_source_meta, symlink_inbox, write_original
 from zkm_eml.parse import parse_eml
 from zkm_eml.render import render_body
+from zkm_eml.source import default_exclude_folders, iter_messages
 from zkm_eml.thread_index import regenerate_thread_index
 from zkm_eml.threading import thread_id_for
 
 
 def convert(store_path: Path, config: dict) -> list[Path]:
-    src = Path(config["EML_SOURCE_DIR"]).expanduser().resolve()
+    src_raw = config.get("EML_SOURCE_DIR", "").strip()
+    src = Path(src_raw).expanduser().resolve() if src_raw else Path.home() / "mail"
     if not src.exists():
         raise FileNotFoundError(f"EML_SOURCE_DIR does not exist: {src}")
 
+    exclude_raw = config.get("EML_FOLDERS_EXCLUDE", "")
+    if exclude_raw.strip():
+        exclude_folders = [p.strip() for p in exclude_raw.split(",") if p.strip()]
+    else:
+        exclude_folders = default_exclude_folders()
+
     keep_originals = config.get("EML_KEEP_ORIGINALS", "true").lower() not in ("false", "0", "no")
+    attachment_inbox = config.get("EML_ATTACHMENT_INBOX", "true").lower() not in ("false", "0", "no")
     owner_addrs = {
         a.strip().lower()
         for a in config.get("EML_OWNER_ADDRESSES", "").split(",")
@@ -32,16 +43,22 @@ def convert(store_path: Path, config: dict) -> list[Path]:
     }
 
     messages_dir = store_path / "mail" / "messages"
-    originals_dir = store_path / "originals" / "mail"
+    for d in ["mail/messages", "mail/threads", "originals/mail", "inbox"]:
+        (store_path / d).mkdir(parents=True, exist_ok=True)
 
     existing_ids = _scan_existing_message_ids(messages_dir)
     created: list[Path] = []
     touched_threads: set[str] = set()
 
-    for eml_path in sorted(src.rglob("*.eml")):
+    # Resolve source git state once per run
+    source_repo, source_repo_commit, _ = resolve_source_meta(src, b"")
+    # Dummy call just to get repo/commit; actual blob computed per message below
+
+    for eml_path in iter_messages(src, exclude_folders):
         if not eml_path.is_file():
             continue
         try:
+            raw = eml_path.read_bytes()
             msg = parse_eml(eml_path)
         except Exception as e:
             print(f"WARN: skipping {eml_path}: {e}", file=sys.stderr)
@@ -55,16 +72,53 @@ def convert(store_path: Path, config: dict) -> list[Path]:
         direction = _direction(msg.from_addr, owner_addrs)
         body = render_body(msg)
 
-        original_rel: str | None = None
-        if keep_originals:
-            slug = _msgid_slug(msg.message_id)
-            orig_dest = originals_dir / f"{slug}.eml"
-            orig_dest.parent.mkdir(parents=True, exist_ok=True)
-            orig_dest.write_bytes(eml_path.read_bytes())
-            original_rel = str(orig_dest.relative_to(store_path))
+        # Resolve git blob from raw bytes (cheap, no subprocess)
+        from zkm_eml.originals import git_blob_sha1
+        source_blob = git_blob_sha1(raw)
 
-        dest = _unique_path(messages_dir, msg.date.strftime("%Y-%m-%d"), _slugify(msg.subject))
-        write_message_md(dest, msg, tid, thread_path, direction, body, original_rel)
+        home = Path.home()
+        try:
+            src_rel_home = str(eml_path.relative_to(home))
+        except ValueError:
+            src_rel_home = None
+
+        original_rel: str | None = None
+        attachment_meta = None
+
+        if keep_originals:
+            msg_slug = _resolve_orig_slug(store_path, msg)
+            original_rel, attachment_pairs = write_original(
+                store_path,
+                msg,
+                raw,
+                msg_slug,
+                source_repo,
+                source_repo_commit,
+                source_blob,
+            )
+            attachment_meta = attachment_pairs if attachment_pairs else None
+
+            if attachment_inbox and attachment_pairs:
+                for att, _ in attachment_pairs:
+                    try:
+                        symlink_inbox(store_path, att)
+                    except Exception as e:
+                        print(f"WARN: inbox symlink failed for {att.filename}: {e}", file=sys.stderr)
+
+        dest = unique_path(messages_dir, f"{msg.date.strftime('%Y-%m-%d')}_{slugify(msg.subject)}")
+        write_message_md(
+            dest,
+            msg,
+            tid,
+            thread_path,
+            direction,
+            body,
+            original_rel,
+            attachment_meta=attachment_meta,
+            source_path_rel_home=src_rel_home,
+            source_repo_commit=source_repo_commit,
+            source_blob=source_blob,
+        )
 
         created.append(dest)
         existing_ids.add(msg.message_id)
@@ -117,7 +171,22 @@ def reprocess(store_path: Path, config: dict, existing: list[Path]) -> list[Path
         direction = _direction(msg.from_addr, owner_addrs)
         body = render_body(msg)
 
-        write_message_md(md_path, msg, tid, thread_path, direction, body, original_rel)
+        source_blob = post.metadata.get("source_blob")
+        source_repo_commit = post.metadata.get("source_repo_commit")
+        source_path_rel_home = post.metadata.get("source_path")
+
+        write_message_md(
+            md_path,
+            msg,
+            tid,
+            thread_path,
+            direction,
+            body,
+            original_rel,
+            source_path_rel_home=source_path_rel_home,
+            source_repo_commit=source_repo_commit,
+            source_blob=source_blob,
+        )
         updated.append(md_path)
         touched_threads.add(tid)
 
@@ -143,7 +212,6 @@ def _scan_existing_message_ids(messages_dir: Path) -> set[str]:
             post = fm.load(md)
             mid = post.metadata.get("message_id", "")
             if mid:
-                # Store without angle brackets for consistent comparison
                 ids.add(mid.strip("<>").strip())
         except Exception:
             continue
@@ -153,29 +221,19 @@ def _scan_existing_message_ids(messages_dir: Path) -> set[str]:
 def _direction(from_addr: str, owner_addrs: set[str]) -> str:
     if not owner_addrs:
         return "unknown"
-    # Extract the bare address from "Name <addr>"
     m = re.search(r"<([^>]+)>", from_addr)
     addr = m.group(1).lower() if m else from_addr.lower()
     return "outgoing" if addr in owner_addrs else "incoming"
 
 
-def _slugify(s: str) -> str:
-    s = re.sub(r"^(re|fwd|fw):\s*", "", s.lower().strip())
-    s = re.sub(r"[^\w\- ]+", "", s)
-    s = re.sub(r"[\s_]+", "-", s).strip("-")
-    return (s or "no-subject")[:60]
-
-
-def _msgid_slug(message_id: str) -> str:
-    """Convert a message_id to a filesystem-safe slug for originals/."""
-    slug = re.sub(r"[^\w@.\-]+", "_", message_id)
-    return slug[:120]
-
-
-def _unique_path(directory: Path, date_prefix: str, slug: str) -> Path:
-    candidate = directory / f"{date_prefix}_{slug}.md"
+def _resolve_orig_slug(store_path: Path, msg) -> str:
+    """Compute a human-readable, collision-free slug for the original files."""
+    originals_dir = store_path / "originals" / "mail"
+    base = f"{msg.date.strftime('%Y-%m-%d')}_{slugify(msg.subject)}"
+    # Avoid collision with existing .eml originals
+    candidate = base
     i = 1
-    while candidate.exists():
-        candidate = directory / f"{date_prefix}_{slug}_{i}.md"
+    while (originals_dir / f"{candidate}.eml").exists():
+        candidate = f"{base}_{i}"
         i += 1
     return candidate

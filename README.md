@@ -1,14 +1,17 @@
 # zkm-eml
 
-[zkm](https://github.com/Zommuter/zkm) plugin that converts `.eml` files to markdown in the knowledge store with full thread modeling.
+[zkm](https://github.com/Zommuter/zkm) plugin that converts Maildir or `.eml` files to markdown in the knowledge store with full thread modeling and attachment extraction.
 
 ## What it does
 
-- Reads `.eml` files from a directory (typically an mbsync Maildir)
+- Reads mail from `~/mail` by default (mbsync Maildir tree) or any directory you point at via `EML_SOURCE_DIR`
+- Handles both Maildir format (files in `cur/`/`new/` without `.eml` extension) and flat `.eml` dumps
 - Writes one `mail/messages/<date>_<slug>.md` per message with frontmatter per the [zkm messaging-spec](https://github.com/Zommuter/zkm/blob/main/docs/messaging-spec.md)
 - Groups messages into threads via RFC 5322 `References` chains — one `mail/threads/<thread_id>.md` per thread, regenerated on every run
-- Stores raw `.eml` originals in `originals/mail/` so future algorithm improvements can re-derive markdown via `zkm convert zkm-eml --reprocess`
-- Deduplicates by `Message-ID` — re-running is safe
+- Stores stripped originals in `originals/mail/` (attachment payloads detached, stubs added) — raw bytes reproducible via `git cat-file blob <source_blob>`
+- Attachments go into a content-addressed store at `originals/mail/_objects/` (sha256-named, deduplicated) and are symlinked from `inbox/` for other zkm plugins to pick up
+- Deduplicates by `Message-ID` — re-running is safe and idempotent
+- Skips `Trash`, `Junk`, `Spam`, `Drafts`, and similar noise folders by default
 
 ## Setup
 
@@ -50,14 +53,23 @@ zkm plugin add ~/src/zkm-eml
 # zkm plugin add https://github.com/Zommuter/zkm-eml.git
 ```
 
-### 3. Configure
+### 3. Configure (optional)
 
-In `$ZKM_STORE/.env`:
+Without any configuration the plugin runs against `~/mail` using built-in defaults. To override, add to `$ZKM_STORE/.env`:
 
-```
-EML_SOURCE_DIR=~/mail/personal
-EML_KEEP_ORIGINALS=true
+```env
+# Optional — defaults to ~/mail
+EML_SOURCE_DIR=~/mail
+
+# Optional — comma-separated folder patterns to skip (case-insensitive)
+# EML_FOLDERS_EXCLUDE=Trash,Junk,Spam,Drafts
+
+# Optional — set to your own addresses for direction detection
 EML_OWNER_ADDRESSES=you@example.com,you@work.example.com
+
+# Optional — set false to skip attachment extraction / inbox symlinks
+# EML_KEEP_ORIGINALS=true
+# EML_ATTACHMENT_INBOX=true
 ```
 
 ### 4. Convert
@@ -66,9 +78,47 @@ EML_OWNER_ADDRESSES=you@example.com,you@work.example.com
 zkm convert zkm-eml
 ```
 
+## Store layout
+
+```
+$ZKM_STORE/
+├── mail/
+│   ├── messages/2026-04-13_invoice-from-acme.md   # one per message
+│   └── threads/a1b2c3d4.md                         # one per thread
+├── originals/mail/
+│   ├── 2026-04-13_invoice-from-acme.eml            # stripped (no attachment payloads)
+│   ├── 2026-04-13_invoice-from-acme.source.json    # reconstruction hints
+│   ├── 2026-04-13_invoice-from-acme/
+│   │   ├── invoice.pdf                             # symlink → _objects/9f/2a3b...
+│   │   └── acme-logo.png                           # symlink → _objects/de/adbeef...
+│   └── _objects/
+│       ├── 9f/2a3b...c4d5                          # deduplicated CAS objects
+│       └── de/adbeef...
+└── inbox/
+    ├── invoice.pdf                                  # symlink → originals/mail/_objects/...
+    └── acme-logo.png                                # deduped — one link per unique payload
+```
+
+## Retrieving full originals
+
+Three paths to the unstripped source, in order of robustness:
+
+```bash
+# 1. Via git blob hash (works even after the file is moved/deleted in ~/mail)
+git -C ~/mail cat-file blob $(jq -r .source_blob originals/mail/2026-04-13_foo.source.json)
+
+# 2. Via commit + relative path
+git -C ~/mail show \
+    "$(jq -r .source_repo_commit originals/mail/2026-04-13_foo.source.json):\
+$(jq -r .source_path_rel_home originals/mail/2026-04-13_foo.source.json)"
+
+# 3. Direct path (works if file is still in ~/mail)
+cat "$(jq -r .source_path originals/mail/2026-04-13_foo.source.json)"
+```
+
 ## Re-processing
 
-When the plugin algorithm improves (e.g. quote stripping is added in v0.2), re-derive all existing markdown from stored originals:
+When the plugin algorithm improves (e.g. quote stripping is added in v0.3), re-derive all existing markdown from stored originals:
 
 ```bash
 zkm convert zkm-eml --reprocess-all
