@@ -18,7 +18,7 @@ from zkm_eml.originals import resolve_source_meta, symlink_inbox, write_original
 from zkm_eml.parse import parse_eml
 from zkm_eml.render import render_body
 from zkm_eml.source import default_exclude_folders, iter_messages
-from zkm_eml.thread_index import regenerate_thread_index
+from zkm_eml.thread_index import ThreadMember, build_thread_membership, write_thread_index
 from zkm_eml.threading import thread_id_for
 
 
@@ -46,7 +46,7 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
     for d in ["mail/messages", "mail/threads", "originals/mail", "inbox"]:
         (store_path / d).mkdir(parents=True, exist_ok=True)
 
-    existing_ids = _scan_existing_message_ids(messages_dir)
+    existing_ids, thread_membership = build_thread_membership(messages_dir)
     created: list[Path] = []
     touched_threads: set[str] = set()
 
@@ -133,12 +133,20 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
             created.append(dest)
             existing_ids.add(msg.message_id)
             touched_threads.add(tid)
+            thread_membership.setdefault(tid, []).append(
+                ThreadMember(
+                    path=dest,
+                    date=msg.date.isoformat(),
+                    subject=msg.subject,
+                    participants=[msg.from_addr] + list(msg.to_addrs) + list(msg.cc_addrs),
+                )
+            )
             if progress:
                 progress(i, total, eml_path.name)
     finally:
-        # Regenerate indexes for every thread touched so far, even on cancel.
+        # Write thread indexes from in-memory state — O(T), not O(T*N).
         for tid in touched_threads:
-            regenerate_thread_index(store_path, tid)
+            write_thread_index(store_path, tid, thread_membership.get(tid, []))
 
     return created
 
@@ -156,6 +164,9 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
         for a in config.get("EML_OWNER_ADDRESSES", "").split(",")
         if a.strip()
     }
+
+    messages_dir = store_path / "mail" / "messages"
+    _, thread_membership = build_thread_membership(messages_dir)
 
     total = len(existing)
     updated: list[Path] = []
@@ -212,11 +223,20 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
             )
             updated.append(md_path)
             touched_threads.add(tid)
+            thread_membership.setdefault(tid, []).append(
+                ThreadMember(
+                    path=md_path,
+                    date=msg.date.isoformat(),
+                    subject=msg.subject,
+                    participants=[msg.from_addr] + list(msg.to_addrs) + list(msg.cc_addrs),
+                )
+            )
             if progress:
                 progress(i, total, md_path.name)
     finally:
+        # Write thread indexes from in-memory state — O(T), not O(T*N).
         for tid in touched_threads:
-            regenerate_thread_index(store_path, tid)
+            write_thread_index(store_path, tid, thread_membership.get(tid, []))
 
     return updated
 
@@ -224,23 +244,6 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _scan_existing_message_ids(messages_dir: Path) -> set[str]:
-    if not messages_dir.exists():
-        return set()
-    import frontmatter as fm
-
-    ids: set[str] = set()
-    for md in messages_dir.rglob("*.md"):
-        try:
-            post = fm.load(md)
-            mid = post.metadata.get("message_id", "")
-            if mid:
-                ids.add(mid.strip("<>").strip())
-        except Exception:
-            continue
-    return ids
 
 
 def _direction(from_addr: str, owner_addrs: set[str]) -> str:

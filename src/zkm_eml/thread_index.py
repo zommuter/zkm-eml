@@ -2,70 +2,100 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import frontmatter
 
 
-def regenerate_thread_index(store_path: Path, thread_id: str) -> Path:
+@dataclass
+class ThreadMember:
+    path: Path
+    date: str
+    subject: str
+    participants: list[str] = field(default_factory=list)
+
+
+def build_thread_membership(
+    messages_dir: Path,
+) -> tuple[set[str], dict[str, list[ThreadMember]]]:
+    """Walk messages_dir once and return (message_ids, thread_membership).
+
+    message_ids  — set of all known message_id values (for deduplication).
+    membership   — {thread_id: [ThreadMember, ...]} for index writes.
     """
-    Collect all messages for thread_id, sort by date, write thread index.
-    Returns the path to the written thread index file.
-    """
-    messages_dir = store_path / "mail" / "messages"
-    threads_dir = store_path / "mail" / "threads"
-    threads_dir.mkdir(parents=True, exist_ok=True)
-
-    thread_messages = _collect_thread_messages(messages_dir, thread_id)
-
-    index_path = threads_dir / f"{thread_id}.md"
-    _write_index(index_path, thread_id, thread_messages)
-    return index_path
-
-
-def _collect_thread_messages(messages_dir: Path, thread_id: str) -> list[dict]:
     if not messages_dir.exists():
-        return []
+        return set(), {}
 
-    msgs = []
+    message_ids: set[str] = set()
+    membership: dict[str, list[ThreadMember]] = {}
+
     for md in messages_dir.rglob("*.md"):
         try:
             post = frontmatter.load(md)
-            if post.metadata.get("thread_id") != thread_id:
-                continue
-            msgs.append({
-                "path": md,
-                "date": post.metadata.get("date", ""),
-                "subject": post.metadata.get("subject", "(no subject)"),
-                "from": _extract_from(post.metadata.get("participants", [])),
-                "rel_path": str(md),
-            })
         except Exception:
             continue
+        mid = post.metadata.get("message_id", "")
+        if mid:
+            message_ids.add(mid.strip("<>").strip())
+        tid = post.metadata.get("thread_id", "")
+        if tid:
+            member = ThreadMember(
+                path=md,
+                date=str(post.metadata.get("date", "")),
+                subject=str(post.metadata.get("subject", "(no subject)")),
+                participants=list(post.metadata.get("participants") or []),
+            )
+            membership.setdefault(tid, []).append(member)
 
-    msgs.sort(key=lambda m: m["date"])
-    return msgs
+    return message_ids, membership
 
 
-def _extract_from(participants: list) -> str:
-    return participants[0] if participants else "?"
+def write_thread_index(
+    store_path: Path,
+    thread_id: str,
+    members: list[ThreadMember],
+) -> Path:
+    """Write mail/threads/<thread_id>.md from an in-memory members list.
+
+    No disk scan — callers supply the full member list including pre-existing
+    members loaded via build_thread_membership() plus any newly added ones.
+    """
+    threads_dir = store_path / "mail" / "threads"
+    threads_dir.mkdir(parents=True, exist_ok=True)
+
+    sorted_members = sorted(members, key=lambda m: m.date)
+    index_path = threads_dir / f"{thread_id}.md"
+    _write_index(index_path, thread_id, sorted_members)
+    return index_path
 
 
-def _write_index(path: Path, thread_id: str, messages: list[dict]) -> None:
-    if not messages:
+def regenerate_thread_index(store_path: Path, thread_id: str) -> Path:
+    """Back-compat wrapper: scan messages_dir and write a single thread index.
+
+    Prefer build_thread_membership() + write_thread_index() in batch runs.
+    """
+    messages_dir = store_path / "mail" / "messages"
+    _, membership = build_thread_membership(messages_dir)
+    members = membership.get(thread_id, [])
+    return write_thread_index(store_path, thread_id, members)
+
+
+def _write_index(path: Path, thread_id: str, members: list[ThreadMember]) -> None:
+    if not members:
         return
 
     participants: list[str] = []
     seen: set[str] = set()
-    for msg in messages:
-        for p in _all_participants_for_msg(msg["path"]):
+    for m in members:
+        for p in m.participants:
             if p not in seen:
                 seen.add(p)
                 participants.append(p)
 
-    first_date = messages[0]["date"][:10] if messages else ""
-    last_date = messages[-1]["date"][:10] if messages else ""
-    subject = messages[0]["subject"] if messages else "(thread)"
+    first_date = members[0].date[:10] if members else ""
+    last_date = members[-1].date[:10] if members else ""
+    subject = members[0].subject if members else "(thread)"
 
     meta = {
         "source": "zkm-eml",
@@ -73,13 +103,16 @@ def _write_index(path: Path, thread_id: str, messages: list[dict]) -> None:
         "participants": participants,
         "first_date": first_date,
         "last_date": last_date,
-        "message_count": len(messages),
+        "message_count": len(members),
     }
 
     rows = []
-    for msg in messages:
-        rel = "../messages/" + Path(msg["path"]).name
-        rows.append(f"| {msg['date'][:16]} | {_md_escape(msg['from'])} | [{_md_escape(msg['subject'])}]({rel}) |")
+    for m in members:
+        rel = "../messages/" + m.path.name
+        from_addr = m.participants[0] if m.participants else "?"
+        rows.append(
+            f"| {m.date[:16]} | {_md_escape(from_addr)} | [{_md_escape(m.subject)}]({rel}) |"
+        )
 
     body = f"# Thread: {subject}\n\n"
     body += "| Date | From | Subject |\n|------|------|------|\n"
@@ -87,14 +120,6 @@ def _write_index(path: Path, thread_id: str, messages: list[dict]) -> None:
 
     post = frontmatter.Post(body, **meta)
     path.write_text(frontmatter.dumps(post), encoding="utf-8")
-
-
-def _all_participants_for_msg(md_path: Path) -> list[str]:
-    try:
-        post = frontmatter.load(md_path)
-        return list(post.metadata.get("participants") or [])
-    except Exception:
-        return []
 
 
 def _md_escape(s: str) -> str:
