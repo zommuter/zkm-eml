@@ -12,6 +12,7 @@ import tempfile
 from email.message import EmailMessage
 from pathlib import Path
 
+from .naming import shard_path
 from .parse import ParsedAttachment, ParsedMessage
 
 
@@ -45,7 +46,8 @@ def write_original(
     store_path: Path,
     msg: ParsedMessage,
     raw_eml: bytes,
-    msg_slug: str,
+    thread_id: str,
+    msg_stem: str,
     source_repo: str | None,
     source_repo_commit: str | None,
     source_blob: str,
@@ -58,8 +60,10 @@ def write_original(
     """
     originals_dir = store_path / "originals" / "mail"
     objects_dir = originals_dir / "_objects"
-    msg_dir = originals_dir / msg_slug
-    originals_dir.mkdir(parents=True, exist_ok=True)
+    aa, rest = shard_path(thread_id)
+    thread_orig_dir = originals_dir / aa / rest
+    thread_orig_dir.mkdir(parents=True, exist_ok=True)
+    msg_dir = thread_orig_dir / msg_stem
 
     # --- Write CAS objects and per-message symlinks ---
     attachment_pairs: list[tuple[ParsedAttachment, str]] = []
@@ -71,16 +75,18 @@ def write_original(
             link_name = _unique_filename_set(att.filename, seen_names)
             seen_names.add(link_name)
             link_path = msg_dir / link_name
-            # Relative target: from msg_dir → objects_dir (sibling under originals/mail/)
-            rel_target = Path("..") / "_objects" / obj_rel
+            # msg_dir = originals/mail/<aa>/<rest>/<stem>/
+            # objects_dir = originals/mail/_objects/
+            # relative: ../../../_objects/<obj_rel>
+            rel_target = Path("../../..") / "_objects" / obj_rel
             if not link_path.exists():
                 link_path.symlink_to(rel_target)
             symlink_rel = str((msg_dir / link_name).relative_to(store_path))
             attachment_pairs.append((att, symlink_rel))
 
     # --- Write stripped .eml ---
-    stripped = _strip_eml(raw_eml, msg.attachments, msg_slug)
-    eml_path = originals_dir / f"{msg_slug}.eml"
+    stripped = _strip_eml(raw_eml, msg.attachments, msg_stem)
+    eml_path = thread_orig_dir / f"{msg_stem}.eml"
     eml_path.write_bytes(stripped)
     eml_rel = str(eml_path.relative_to(store_path))
 
@@ -100,7 +106,7 @@ def write_original(
         "raw_sha256": msg.sha256,
         "raw_size": len(raw_eml),
     }
-    json_path = originals_dir / f"{msg_slug}.source.json"
+    json_path = thread_orig_dir / f"{msg_stem}.source.json"
     json_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
 
     return eml_rel, attachment_pairs

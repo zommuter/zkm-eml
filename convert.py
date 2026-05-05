@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from zkm_eml.frontmatter import write_message_md
-from zkm_eml.naming import slugify, unique_path
+from zkm_eml.naming import message_slug, shard_path, unique_path
 from zkm_eml.originals import resolve_source_meta, symlink_inbox, write_original
 from zkm_eml.parse import parse_eml
 from zkm_eml.render import render_body
@@ -78,7 +78,8 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                 continue
 
             tid = thread_id_for(msg.message_id, msg.references)
-            thread_path = f"mail/threads/{tid}.md"
+            aa, rest = shard_path(tid)
+            thread_path = f"mail/threads/{aa}/{rest}.md"
             direction = _direction(msg.from_addr, owner_addrs)
             body = render_body(msg)
 
@@ -92,16 +93,23 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
             except ValueError:
                 src_rel_home = None
 
+            # Build sharded message path; resolve collision suffix once and reuse for originals.
+            thread_dir = messages_dir / aa / rest
+            thread_dir.mkdir(parents=True, exist_ok=True)
+            stem = f"{msg.date.strftime('%Y-%m-%d-%H%M')}-{message_slug(msg.subject, msg.from_addr)}"
+            dest = unique_path(thread_dir, stem)
+            msg_stem = dest.stem
+
             original_rel: str | None = None
             attachment_meta = None
 
             if keep_originals:
-                msg_slug = _resolve_orig_slug(store_path, msg)
                 original_rel, attachment_pairs = write_original(
                     store_path,
                     msg,
                     raw,
-                    msg_slug,
+                    tid,
+                    msg_stem,
                     source_repo,
                     source_repo_commit,
                     source_blob,
@@ -115,7 +123,6 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                         except Exception as e:
                             print(f"WARN: inbox symlink failed for {att.filename}: {e}", file=sys.stderr)
 
-            dest = unique_path(messages_dir, f"{msg.date.strftime('%Y-%m-%d')}_{slugify(msg.subject)}")
             write_message_md(
                 dest,
                 msg,
@@ -201,7 +208,8 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
                 continue
 
             tid = thread_id_for(msg.message_id, msg.references)
-            thread_path = f"mail/threads/{tid}.md"
+            aa, rest = shard_path(tid)
+            thread_path = f"mail/threads/{aa}/{rest}.md"
             direction = _direction(msg.from_addr, owner_addrs)
             body = render_body(msg)
 
@@ -252,16 +260,3 @@ def _direction(from_addr: str, owner_addrs: set[str]) -> str:
     m = re.search(r"<([^>]+)>", from_addr)
     addr = m.group(1).lower() if m else from_addr.lower()
     return "outgoing" if addr in owner_addrs else "incoming"
-
-
-def _resolve_orig_slug(store_path: Path, msg) -> str:
-    """Compute a human-readable, collision-free slug for the original files."""
-    originals_dir = store_path / "originals" / "mail"
-    base = f"{msg.date.strftime('%Y-%m-%d')}_{slugify(msg.subject)}"
-    # Avoid collision with existing .eml originals
-    candidate = base
-    i = 1
-    while (originals_dir / f"{candidate}.eml").exists():
-        candidate = f"{base}_{i}"
-        i += 1
-    return candidate

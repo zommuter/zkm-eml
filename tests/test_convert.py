@@ -34,7 +34,7 @@ def test_convert_basic(store: Path):
         assert "thread_id" in post.metadata
         assert "thread" in post.metadata
         assert "processor" in post.metadata
-        assert post.metadata["processor_version"] == "0.2.1"
+        assert post.metadata["processor_version"] == "0.3.0"
 
 
 def test_convert_idempotent(store: Path):
@@ -48,7 +48,7 @@ def test_convert_idempotent(store: Path):
 def test_convert_thread_index_created(store: Path):
     config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "false"}
     convert(store, config)
-    thread_files = list((store / "mail" / "threads").glob("*.md"))
+    thread_files = list((store / "mail" / "threads").rglob("*.md"))
     assert len(thread_files) >= 1
     for tf in thread_files:
         post = frontmatter.load(tf)
@@ -82,7 +82,7 @@ def test_convert_reply_shares_thread_id(store: Path):
 def test_convert_keeps_originals(store: Path):
     config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "true"}
     convert(store, config)
-    originals = list((store / "originals" / "mail").glob("*.eml"))
+    originals = list((store / "originals" / "mail").rglob("*.eml"))
     assert len(originals) >= 1
 
 

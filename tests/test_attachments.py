@@ -98,10 +98,7 @@ def test_per_message_symlinks(store: Path):
     convert(store, config)
 
     originals_mail = store / "originals" / "mail"
-    msg_dirs = [p for p in originals_mail.iterdir() if p.is_dir() and p.name != "_objects"]
-    symlinks = []
-    for d in msg_dirs:
-        symlinks.extend(p for p in d.iterdir() if p.is_symlink())
+    symlinks = [p for p in originals_mail.rglob("*") if p.is_symlink()]
 
     assert len(symlinks) > 0
     for link in symlinks:
@@ -153,7 +150,7 @@ def test_frontmatter_attachments_field(store: Path):
     }
     convert(store, config)
 
-    messages = list((store / "mail" / "messages").glob("*.md"))
+    messages = list((store / "mail" / "messages").rglob("*.md"))
     assert len(messages) > 0
 
     # Find a message that has attachments
@@ -187,7 +184,7 @@ def test_stripped_eml_has_stub_headers(store: Path):
     }
     convert(store, config)
 
-    originals = list((store / "originals" / "mail").glob("*.eml"))
+    originals = list((store / "originals" / "mail").rglob("*.eml"))
     assert len(originals) == 1
     content = originals[0].read_text(errors="replace")
     assert "X-Zkm-Detached:" in content

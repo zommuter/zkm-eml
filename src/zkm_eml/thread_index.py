@@ -1,11 +1,14 @@
-"""Regenerate mail/threads/<thread_id>.md from all messages in that thread."""
+"""Regenerate mail/threads/<aa>/<rest>.md from all messages in that thread."""
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import frontmatter
+
+from .naming import shard_path
 
 
 @dataclass
@@ -56,16 +59,17 @@ def write_thread_index(
     thread_id: str,
     members: list[ThreadMember],
 ) -> Path:
-    """Write mail/threads/<thread_id>.md from an in-memory members list.
+    """Write mail/threads/<aa>/<rest>.md from an in-memory members list.
 
     No disk scan — callers supply the full member list including pre-existing
     members loaded via build_thread_membership() plus any newly added ones.
     """
-    threads_dir = store_path / "mail" / "threads"
+    aa, rest = shard_path(thread_id)
+    threads_dir = store_path / "mail" / "threads" / aa
     threads_dir.mkdir(parents=True, exist_ok=True)
 
     sorted_members = sorted(members, key=lambda m: m.date)
-    index_path = threads_dir / f"{thread_id}.md"
+    index_path = threads_dir / f"{rest}.md"
     _write_index(index_path, thread_id, sorted_members)
     return index_path
 
@@ -108,7 +112,7 @@ def _write_index(path: Path, thread_id: str, members: list[ThreadMember]) -> Non
 
     rows = []
     for m in members:
-        rel = "../messages/" + m.path.name
+        rel = os.path.relpath(m.path, path.parent)
         from_addr = m.participants[0] if m.participants else "?"
         rows.append(
             f"| {m.date[:16]} | {_md_escape(from_addr)} | [{_md_escape(m.subject)}]({rel}) |"
