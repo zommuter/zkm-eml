@@ -7,8 +7,6 @@
 - [ ] Drafts: optional "follow draft updates" mode (Message-ID/content changes on each save) — YAGNI for now
 - [ ] `_objects` GC: walk stripped .eml stubs and remove unreferenced CAS objects (analogous to `git gc`)
 - [ ] v0.5 quote stripping: detect and collapse full-quote blocks; trigger via --reprocess. Design sketch in CLAUDE.md.
-- [ ] inbox/mail dedup: same CAS object symlinked from multiple messages currently produces multiple inbox/mail/YYYY/MM/<file> entries (one per message date); decide policy — keep one canonical link, or keep all and add backlinks
-- [ ] inbox/mail origin backlink: each inbox/mail/YYYY/MM/<file> symlink has no pointer back to the message(s) that produced it; consider a sidecar <file>.origin.json listing message paths and sha256
 - [ ] SHA-256 git repo support: auto-detect via `git rev-parse --show-object-format`; fall back to subprocess for source_blob
 - [ ] Attachment MIME type refinement: use python-magic for more accurate typing of synthesized filenames
 - [ ] Update installed plugin copy in ~/src/zkm/plugins/zkm-zkm-eml to v0.4
@@ -21,3 +19,4 @@
 - [x] Fixed-width progress bar layout (zkm core): added explicit `bar_format=` to tqdm call to prevent horizontal jitter — covered by tests (23 zkm tests passing) on 2026-05-05
 - [x] v0.3 sharded paths + HHMM filenames + smart empty-subject slug: mail/messages/<aa>/<rest>/YYYY-MM-DD-HHMM-slug.md, same for threads and originals; from-<localpart> fallback; stem shared between .md and .eml to eliminate drift — covered by tests (49 passing) on 2026-05-05
 - [x] v0.4 date-sharded layout: mail/messages/YYYY/MM/YYYY-MM-DD-HHMM-thread8-slug.md; threads/YYYY/MM/YYYY-MM-DD-thread8-slug.md (first-message date); mail/_objects/ CAS (out of originals/); inbox/mail/YYYY/MM/ symlinks; EML_LIMIT_RECENT for fast test runs; knowledge store rolled back and re-seeded with 10 messages — covered by tests (54 passing) on 2026-05-05
+- [x] Inbox origin sidecar: one-canonical-symlink-per-CAS dedup + <file>.origin.json listing all producers (plugin, message path, sha256); build_inbox_canonical_index pre-scans existing symlinks; atomic read-merge-write — covered by tests (57/57 passing) on 2026-05-05
