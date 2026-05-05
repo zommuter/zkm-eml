@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from zkm_eml.naming import message_slug, shard_path, slugify
+from datetime import datetime, timezone
+
+from zkm_eml.naming import date_shard, message_slug, slugify, thread_stub
 
 
 def test_slugify_normal():
@@ -48,12 +50,19 @@ def test_message_slug_re_subject_uses_stripped():
     assert message_slug("Re: Hello Bob", "x@y.com") == "hello-bob"
 
 
-def test_shard_path_splits_correctly():
-    assert shard_path("a3f9b1c2d3e4f5a6") == ("a3", "f9b1c2d3e4f5a6")
+def test_date_shard_returns_year_month():
+    dt = datetime(2026, 5, 7, 14, 30, tzinfo=timezone.utc)
+    assert date_shard(dt) == ("2026", "05")
 
 
-def test_shard_path_first_two_chars():
-    tid = "0" * 16
-    aa, rest = shard_path(tid)
-    assert aa == "00"
-    assert rest == "0" * 14
+def test_date_shard_pads_month():
+    dt = datetime(2024, 1, 15, 9, 0, tzinfo=timezone.utc)
+    assert date_shard(dt) == ("2024", "01")
+
+
+def test_thread_stub_first_eight():
+    assert thread_stub("a3f9b1c2d3e4f5a6") == "a3f9b1c2"
+
+
+def test_thread_stub_short_id():
+    assert thread_stub("abcd") == "abcd"

@@ -53,7 +53,7 @@ def test_cas_object_written(store: Path):
     }
     convert(store, config)
 
-    objects_dir = store / "originals" / "mail" / "_objects"
+    objects_dir = store / "mail" / "_objects"
     assert objects_dir.exists()
     objects = list(objects_dir.rglob("*"))
     cas_files = [p for p in objects if p.is_file()]
@@ -83,7 +83,7 @@ def test_cas_deduplication(store: Path):
     }
     convert(store, config)
 
-    objects_dir = store / "originals" / "mail" / "_objects"
+    objects_dir = store / "mail" / "_objects"
     cas_files = [p for p in objects_dir.rglob("*") if p.is_file()]
     # Both messages share the same PDF payload — only one CAS object
     assert len(cas_files) == 1
@@ -114,11 +114,15 @@ def test_inbox_symlinks_created(store: Path):
     }
     convert(store, config)
 
-    inbox = store / "inbox"
-    links = [p for p in inbox.iterdir() if p.is_symlink()]
+    inbox_mail = store / "inbox" / "mail"
+    links = [p for p in inbox_mail.rglob("*") if p.is_symlink()]
     assert len(links) > 0
     for link in links:
         assert link.resolve().exists(), f"Broken inbox symlink: {link}"
+    # Verify date-sharded layout: inbox/mail/YYYY/MM/<file>
+    for link in links:
+        parts = link.relative_to(inbox_mail).parts
+        assert len(parts) == 3, f"Expected YYYY/MM/filename, got {parts}"
 
 
 def test_inbox_dedup(store: Path):
@@ -136,8 +140,8 @@ def test_inbox_dedup(store: Path):
     }
     convert(store, config)
 
-    inbox = store / "inbox"
-    links = [p for p in inbox.iterdir() if p.is_symlink()]
+    inbox_mail = store / "inbox" / "mail"
+    links = [p for p in inbox_mail.rglob("*") if p.is_symlink()]
     # invoice.pdf appears in both, but only one unique CAS → one inbox link
     assert len(links) == 1
 
@@ -204,7 +208,7 @@ def test_idempotent_with_attachments(store: Path):
     assert len(first) > 0
     assert len(second) == 0
 
-    objects_before = list((store / "originals" / "mail" / "_objects").rglob("*") if (store / "originals" / "mail" / "_objects").exists() else [])
+    objects_before = list((store / "mail" / "_objects").rglob("*") if (store / "mail" / "_objects").exists() else [])
     # Second run doesn't create extra objects
-    objects_after = list((store / "originals" / "mail" / "_objects").rglob("*"))
+    objects_after = list((store / "mail" / "_objects").rglob("*"))
     assert len(objects_before) == len(objects_after)

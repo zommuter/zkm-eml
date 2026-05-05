@@ -9,7 +9,7 @@ import frontmatter
 from .parse import ParsedAttachment, ParsedMessage
 
 PLUGIN_NAME = "zkm-eml"
-PLUGIN_VERSION = "0.3.0"
+PLUGIN_VERSION = "0.4.0"
 
 
 def write_message_md(
@@ -74,7 +74,7 @@ def _att_entry(att: ParsedAttachment, rel_path: str) -> dict:
         "size": att.size,
         "sha256": sha,
         "path": rel_path,
-        "object": f"originals/mail/_objects/{sha[:2]}/{sha[2:]}",
+        "object": f"mail/_objects/{sha[:2]}/{sha[2:]}",
         "inline": att.is_inline,
         "cid_referenced": att.referenced_in_html,
     }

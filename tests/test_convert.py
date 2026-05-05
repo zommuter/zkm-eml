@@ -34,7 +34,7 @@ def test_convert_basic(store: Path):
         assert "thread_id" in post.metadata
         assert "thread" in post.metadata
         assert "processor" in post.metadata
-        assert post.metadata["processor_version"] == "0.3.0"
+        assert post.metadata["processor_version"] == "0.4.0"
 
 
 def test_convert_idempotent(store: Path):
@@ -128,3 +128,57 @@ def test_reprocess_updates_existing(store: Path):
     assert len(updated) == len(created)
     for p in updated:
         assert p.exists()
+
+
+def test_message_paths_are_date_sharded(store: Path):
+    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "false"}
+    created = convert(store, config)
+    assert len(created) >= 1
+    for p in created:
+        # Expect mail/messages/YYYY/MM/YYYY-MM-DD-HHMM-<thread8>-<slug>.md
+        parts = p.relative_to(store / "mail" / "messages").parts
+        assert len(parts) == 3, f"Expected YYYY/MM/filename.md, got {parts}"
+        YYYY, MM, filename = parts
+        assert YYYY.isdigit() and len(YYYY) == 4
+        assert MM.isdigit() and len(MM) == 2
+        # Filename: YYYY-MM-DD-HHMM-<8hex>-<slug>.md
+        name = filename[: -len(".md")]
+        segments = name.split("-")
+        assert len(segments) >= 4, f"Unexpected filename shape: {filename}"
+        # 5th segment (index 4) is the 8-hex thread stub
+        assert len(segments) >= 5 and len(segments[4]) == 8 and all(
+            c in "0123456789abcdef" for c in segments[4]
+        ), f"No 8-hex thread stub in: {filename}"
+
+
+def test_thread_paths_are_date_sharded(store: Path):
+    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "false"}
+    convert(store, config)
+    threads_dir = store / "mail" / "threads"
+    thread_files = list(threads_dir.rglob("*.md"))
+    assert len(thread_files) >= 1
+    for tf in thread_files:
+        parts = tf.relative_to(threads_dir).parts
+        assert len(parts) == 3, f"Expected YYYY/MM/filename.md, got {parts}"
+        YYYY, MM, _ = parts
+        assert YYYY.isdigit() and len(YYYY) == 4
+        assert MM.isdigit() and len(MM) == 2
+
+
+def test_limit_recent(store: Path, tmp_path: Path):
+    import os
+    import shutil
+    src = tmp_path / "eml_src"
+    src.mkdir()
+    fixtures_list = sorted(FIXTURES.glob("*.eml"))
+    assert len(fixtures_list) >= 3, "Need at least 3 fixtures for this test"
+    for idx, eml in enumerate(fixtures_list[:5]):
+        dest = src / eml.name
+        shutil.copy(eml, dest)
+        # Spread mtime so ordering is deterministic
+        mtime = 1000000 + idx * 1000
+        os.utime(dest, (mtime, mtime))
+
+    config = {"EML_SOURCE_DIR": str(src), "EML_KEEP_ORIGINALS": "false", "EML_LIMIT_RECENT": "2"}
+    created = convert(store, config)
+    assert len(created) == 2

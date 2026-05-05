@@ -1,4 +1,4 @@
-"""Regenerate mail/threads/<aa>/<rest>.md from all messages in that thread."""
+"""Regenerate mail/threads/YYYY/MM/YYYY-MM-DD-<thread8>-<slug>.md from all messages in that thread."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import frontmatter
 
-from .naming import shard_path
+from .naming import slugify, thread_stub
 
 
 @dataclass
@@ -54,22 +54,30 @@ def build_thread_membership(
     return message_ids, membership
 
 
+def thread_index_path(store_path: Path, thread_id: str, members: list[ThreadMember]) -> Path:
+    """Return the Path for the thread index, derived from the earliest member."""
+    sorted_members = sorted(members, key=lambda m: m.date)
+    anchor = sorted_members[0]
+    date_str = anchor.date[:10]  # YYYY-MM-DD
+    YYYY, MM = date_str[:4], date_str[5:7]
+    t8 = thread_stub(thread_id)
+    slug = slugify(anchor.subject) or "thread"
+    return store_path / "mail" / "threads" / YYYY / MM / f"{date_str}-{t8}-{slug}.md"
+
+
 def write_thread_index(
     store_path: Path,
     thread_id: str,
     members: list[ThreadMember],
 ) -> Path:
-    """Write mail/threads/<aa>/<rest>.md from an in-memory members list.
+    """Write mail/threads/YYYY/MM/YYYY-MM-DD-<thread8>-<slug>.md from an in-memory members list.
 
     No disk scan — callers supply the full member list including pre-existing
     members loaded via build_thread_membership() plus any newly added ones.
     """
-    aa, rest = shard_path(thread_id)
-    threads_dir = store_path / "mail" / "threads" / aa
-    threads_dir.mkdir(parents=True, exist_ok=True)
-
     sorted_members = sorted(members, key=lambda m: m.date)
-    index_path = threads_dir / f"{rest}.md"
+    index_path = thread_index_path(store_path, thread_id, sorted_members)
+    index_path.parent.mkdir(parents=True, exist_ok=True)
     _write_index(index_path, thread_id, sorted_members)
     return index_path
 
@@ -82,6 +90,8 @@ def regenerate_thread_index(store_path: Path, thread_id: str) -> Path:
     messages_dir = store_path / "mail" / "messages"
     _, membership = build_thread_membership(messages_dir)
     members = membership.get(thread_id, [])
+    if not members:
+        raise ValueError(f"No messages found for thread_id {thread_id}")
     return write_thread_index(store_path, thread_id, members)
 
 

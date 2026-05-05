@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from pathlib import Path
 
 
@@ -26,9 +27,14 @@ def message_slug(subject: str, from_addr: str) -> str:
     return (f"from-{local}" if local else "from-unknown")[:60]
 
 
-def shard_path(thread_id: str) -> tuple[str, str]:
-    """Split a thread_id into (first-2-hex, remaining-14-hex) for directory sharding."""
-    return thread_id[:2], thread_id[2:]
+def date_shard(date: datetime) -> tuple[str, str]:
+    """Return (YYYY, MM) strings for year/month directory sharding."""
+    return date.strftime("%Y"), date.strftime("%m")
+
+
+def thread_stub(thread_id: str) -> str:
+    """Return the first 8 hex chars of thread_id for use in filenames."""
+    return thread_id[:8]
 
 
 def msgid_slug(message_id: str) -> str:

@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from zkm_eml.frontmatter import write_message_md
-from zkm_eml.naming import message_slug, shard_path, unique_path
+from zkm_eml.naming import date_shard, message_slug, slugify, thread_stub, unique_path
 from zkm_eml.originals import resolve_source_meta, symlink_inbox, write_original
 from zkm_eml.parse import parse_eml
 from zkm_eml.render import render_body
@@ -42,8 +42,10 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
         if a.strip()
     }
 
+    limit_recent = int(config.get("EML_LIMIT_RECENT", "0") or "0")
+
     messages_dir = store_path / "mail" / "messages"
-    for d in ["mail/messages", "mail/threads", "originals/mail", "inbox"]:
+    for d in ["mail/messages", "mail/threads", "mail/_objects", "originals/mail", "inbox"]:
         (store_path / d).mkdir(parents=True, exist_ok=True)
 
     existing_ids, thread_membership = build_thread_membership(messages_dir)
@@ -55,6 +57,8 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
 
     # Pre-pass for progress total (cheap directory walk, no file reads)
     all_paths = list(iter_messages(src, exclude_folders))
+    if limit_recent:
+        all_paths.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     total = len(all_paths)
 
     try:
@@ -78,8 +82,8 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                 continue
 
             tid = thread_id_for(msg.message_id, msg.references)
-            aa, rest = shard_path(tid)
-            thread_path = f"mail/threads/{aa}/{rest}.md"
+            t8 = thread_stub(tid)
+            YYYY, MM = date_shard(msg.date)
             direction = _direction(msg.from_addr, owner_addrs)
             body = render_body(msg)
 
@@ -94,11 +98,23 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                 src_rel_home = None
 
             # Build sharded message path; resolve collision suffix once and reuse for originals.
-            thread_dir = messages_dir / aa / rest
+            thread_dir = messages_dir / YYYY / MM
             thread_dir.mkdir(parents=True, exist_ok=True)
-            stem = f"{msg.date.strftime('%Y-%m-%d-%H%M')}-{message_slug(msg.subject, msg.from_addr)}"
+            stem = f"{msg.date.strftime('%Y-%m-%d-%H%M')}-{t8}-{message_slug(msg.subject, msg.from_addr)}"
             dest = unique_path(thread_dir, stem)
             msg_stem = dest.stem
+
+            # Compute thread index path from earliest-known member for this thread.
+            existing_members = thread_membership.get(tid, [])
+            if existing_members:
+                anchor = min(existing_members, key=lambda m: m.date)
+                anchor_date = anchor.date[:10]
+                t_slug = slugify(anchor.subject) or "thread"
+            else:
+                anchor_date = msg.date.strftime("%Y-%m-%d")
+                t_slug = slugify(msg.subject) or "thread"
+            t_YYYY, t_MM = anchor_date[:4], anchor_date[5:7]
+            thread_path = f"mail/threads/{t_YYYY}/{t_MM}/{anchor_date}-{t8}-{t_slug}.md"
 
             original_rel: str | None = None
             attachment_meta = None
@@ -108,7 +124,6 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                     store_path,
                     msg,
                     raw,
-                    tid,
                     msg_stem,
                     source_repo,
                     source_repo_commit,
@@ -119,7 +134,7 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                 if attachment_inbox and attachment_pairs:
                     for att, _ in attachment_pairs:
                         try:
-                            symlink_inbox(store_path, att)
+                            symlink_inbox(store_path, att, msg.date)
                         except Exception as e:
                             print(f"WARN: inbox symlink failed for {att.filename}: {e}", file=sys.stderr)
 
@@ -150,6 +165,8 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
             )
             if progress:
                 progress(i, total, eml_path.name)
+            if limit_recent and len(created) >= limit_recent:
+                break
     finally:
         # Write thread indexes from in-memory state — O(T), not O(T*N).
         for tid in touched_threads:
@@ -208,10 +225,20 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
                 continue
 
             tid = thread_id_for(msg.message_id, msg.references)
-            aa, rest = shard_path(tid)
-            thread_path = f"mail/threads/{aa}/{rest}.md"
+            t8 = thread_stub(tid)
             direction = _direction(msg.from_addr, owner_addrs)
             body = render_body(msg)
+
+            existing_members = thread_membership.get(tid, [])
+            if existing_members:
+                anchor = min(existing_members, key=lambda m: m.date)
+                anchor_date = anchor.date[:10]
+                t_slug = slugify(anchor.subject) or "thread"
+            else:
+                anchor_date = msg.date.strftime("%Y-%m-%d")
+                t_slug = slugify(msg.subject) or "thread"
+            t_YYYY, t_MM = anchor_date[:4], anchor_date[5:7]
+            thread_path = f"mail/threads/{t_YYYY}/{t_MM}/{anchor_date}-{t8}-{t_slug}.md"
 
             source_blob = post.metadata.get("source_blob")
             source_repo_commit = post.metadata.get("source_repo_commit")
