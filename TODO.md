@@ -1,19 +1,16 @@
-# zkm-eml TODO
+# TODO
 
-## Open questions / deferred work
+## Current
+- [ ] Decoration vs inline-photo classification: heuristics to distinguish logos/banners from informational inline images (size, repeated cid across senders, alt-text, tracking domains). Currently all attachments treated uniformly.
+- [ ] Per-store YAML/JSON config shared by zkm core and all plugins — replaces long comma-separated env vars
+- [ ] Deleted-mail policy: detect removals from ~/mail between runs; options: always-keep (default), purge, archive-only
+- [ ] Drafts: optional "follow draft updates" mode (Message-ID/content changes on each save) — YAGNI for now
+- [ ] `_objects` GC: walk stripped .eml stubs and remove unreferenced CAS objects (analogous to `git gc`)
+- [ ] v0.3 quote stripping: detect and collapse full-quote blocks; trigger via --reprocess. Design sketch in CLAUDE.md.
+- [ ] SHA-256 git repo support: auto-detect via `git rev-parse --show-object-format`; fall back to subprocess for source_blob
+- [ ] Attachment MIME type refinement: use python-magic for more accurate typing of synthesized filenames
+- [ ] Update installed plugin copy in ~/src/zkm/plugins/zkm-zkm-eml to v0.2
 
-- **Decoration vs inline-photo classification**: distinguish logos/banners from informational inline images. Heuristics to explore: size threshold, repeated cid across senders, alt-text content, URL-tracking domains in HTML. Currently all attachments are treated uniformly.
-
-- **Per-store YAML/JSON config**: replace .env-only configuration with a richer config file at the store level, shared by zkm core and all plugins. Avoids long comma-separated env values.
-
-- **Deleted-mail policy**: currently messages in zkm are kept even if removed from `~/mail`. Need a flag and detection logic for deletions (diff of message-ids between runs). Options: always keep (default), purge spam, archive-only. Applies to entire folders (e.g. Trash auto-emptied by MUA).
-
-- **Drafts**: optional "follow draft updates" mode where a draft's evolving state is tracked. Tricky because Message-ID and content can change with each save. YAGNI for now.
-
-- **`_objects` garbage collection**: when a stripped .eml is purged from the store, its CAS objects may become orphans. Need a `zkm-eml gc` (or `zkm gc` with per-plugin hooks) that walks all stubs and removes unreferenced objects — analogous to `git gc`.
-
-- **v0.2 quote stripping** (from original CLAUDE.md): detect and collapse full-quote blocks. Trigger via `--reprocess` once implemented. Design sketch preserved in CLAUDE.md.
-
-- **SHA-256 git repos**: `git_blob_sha1` uses SHA-1, which is correct for standard repos. If `~/mail` ever migrates to `git --object-format=sha256`, auto-detect via `git rev-parse --show-object-format` and switch to SHA-256.
-
-- **Attachment MIME type refinement**: currently uses `mimetypes.guess_extension` for synthesized filenames. Could use `python-magic` for more accurate typing if the payload bytes are ambiguous.
+## Done
+- [x] v0.1 EML to markdown with thread modeling — covered by tests (test_convert.py, test_parse.py, test_threading.py) on 2026-05-05
+- [x] v0.2 default ~/mail, Maildir iteration, CAS attachment extraction, inbox symlinks — covered by tests (37 passing) on 2026-05-05
