@@ -14,3 +14,5 @@
 ## Done
 - [x] v0.1 EML to markdown with thread modeling — covered by tests (test_convert.py, test_parse.py, test_threading.py) on 2026-05-05
 - [x] v0.2 default ~/mail, Maildir iteration, CAS attachment extraction, inbox symlinks — covered by tests (37 passing) on 2026-05-05
+- [x] ESC/Ctrl+C cancellation responsiveness: replaced O(T×N) thread index regen in `finally` with O(T) in-memory write via `build_thread_membership` + `write_thread_index` — covered by tests (38 passing) on 2026-05-05
+- [x] Fixed-width progress bar layout (zkm core): added explicit `bar_format=` to tqdm call to prevent horizontal jitter — covered by tests (23 zkm tests passing) on 2026-05-05
