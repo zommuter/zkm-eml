@@ -34,7 +34,7 @@ def test_convert_basic(store: Path):
         assert "thread_id" in post.metadata
         assert "thread" in post.metadata
         assert "processor" in post.metadata
-        assert post.metadata["processor_version"] == "0.4.0"
+        assert post.metadata["processor_version"] == "0.5.0"
 
 
 def test_convert_idempotent(store: Path):
@@ -86,21 +86,30 @@ def test_convert_keeps_originals(store: Path):
     assert len(originals) >= 1
 
 
-def test_convert_direction_detection(store: Path):
-    config = {
-        "EML_SOURCE_DIR": str(FIXTURES),
-        "EML_KEEP_ORIGINALS": "false",
-        "EML_OWNER_ADDRESSES": "alice@example.com",
-    }
+def test_convert_participant_roles(store: Path):
+    """Participants are emitted as role-tagged dicts; no direction field."""
+    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "false"}
     convert(store, config)
     messages_dir = store / "mail" / "messages"
-    directions = {}
+    by_subject: dict = {}
     for md in messages_dir.rglob("*.md"):
         post = frontmatter.load(md)
         subj = post.metadata.get("subject", "")
-        directions[subj] = post.metadata.get("direction", "unknown")
-    assert directions.get("Hello Bob") == "outgoing"
-    assert directions.get("Re: Hello Bob") == "incoming"
+        by_subject[subj] = post.metadata
+
+    # "Hello Bob": From alice, To bob
+    hello = by_subject.get("Hello Bob", {})
+    assert "direction" not in hello, "direction field must not be emitted"
+    participants = hello.get("participants", [])
+    roles = {p["role"]: p["address"] for p in participants}
+    assert roles.get("from") == "alice@example.com"
+    assert roles.get("to") == "bob@example.com"
+
+    # "Re: Hello Bob": From bob, To alice
+    reply = by_subject.get("Re: Hello Bob", {})
+    roles_r = {p["role"]: p["address"] for p in reply.get("participants", [])}
+    assert roles_r.get("from") == "bob@example.com"
+    assert roles_r.get("to") == "alice@example.com"
 
 
 def test_convert_progress_callback(store: Path):

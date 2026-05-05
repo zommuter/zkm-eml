@@ -16,7 +16,7 @@ class ThreadMember:
     path: Path
     date: str
     subject: str
-    participants: list[str] = field(default_factory=list)
+    participants: list = field(default_factory=list)  # list[dict] (new) or list[str] (legacy)
 
 
 def build_thread_membership(
@@ -99,13 +99,15 @@ def _write_index(path: Path, thread_id: str, members: list[ThreadMember]) -> Non
     if not members:
         return
 
-    participants: list[str] = []
-    seen: set[str] = set()
+    # Flat-dedup participants for thread-level summary (addresses only, no roles).
+    seen_addrs: set[str] = set()
+    flat_participants: list[str] = []
     for m in members:
         for p in m.participants:
-            if p not in seen:
-                seen.add(p)
-                participants.append(p)
+            addr = _participant_display(p)
+            if addr and addr not in seen_addrs:
+                seen_addrs.add(addr)
+                flat_participants.append(addr)
 
     first_date = members[0].date[:10] if members else ""
     last_date = members[-1].date[:10] if members else ""
@@ -114,7 +116,7 @@ def _write_index(path: Path, thread_id: str, members: list[ThreadMember]) -> Non
     meta = {
         "source": "zkm-eml",
         "thread_id": thread_id,
-        "participants": participants,
+        "participants": flat_participants,
         "first_date": first_date,
         "last_date": last_date,
         "message_count": len(members),
@@ -123,9 +125,9 @@ def _write_index(path: Path, thread_id: str, members: list[ThreadMember]) -> Non
     rows = []
     for m in members:
         rel = os.path.relpath(m.path, path.parent)
-        from_addr = m.participants[0] if m.participants else "?"
+        sender = _message_sender(m.participants)
         rows.append(
-            f"| {m.date[:16]} | {_md_escape(from_addr)} | [{_md_escape(m.subject)}]({rel}) |"
+            f"| {m.date[:16]} | {_md_escape(sender)} | [{_md_escape(m.subject)}]({rel}) |"
         )
 
     body = f"# Thread: {subject}\n\n"
@@ -134,6 +136,25 @@ def _write_index(path: Path, thread_id: str, members: list[ThreadMember]) -> Non
 
     post = frontmatter.Post(body, **meta)
     path.write_text(frontmatter.dumps(post), encoding="utf-8")
+
+
+def _participant_display(p: dict | str) -> str:
+    """Return a human-readable string from a participant dict or legacy string."""
+    if isinstance(p, str):
+        return p
+    name = p.get("name", "")
+    addr = p.get("address", "")
+    return f"{name} <{addr}>" if name else addr
+
+
+def _message_sender(participants: list) -> str:
+    """Return display string for the from-role participant, or '?' if absent."""
+    for p in participants:
+        if isinstance(p, dict) and p.get("role") == "from":
+            return _participant_display(p)
+        if isinstance(p, str):
+            return p  # legacy: first participant was the sender
+    return "?"
 
 
 def _md_escape(s: str) -> str:

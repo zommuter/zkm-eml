@@ -5,7 +5,6 @@ Plugin entry point. See CLAUDE.md for architecture notes.
 
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -36,11 +35,6 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
 
     keep_originals = config.get("EML_KEEP_ORIGINALS", "true").lower() not in ("false", "0", "no")
     attachment_inbox = config.get("EML_ATTACHMENT_INBOX", "true").lower() not in ("false", "0", "no")
-    owner_addrs = {
-        a.strip().lower()
-        for a in config.get("EML_OWNER_ADDRESSES", "").split(",")
-        if a.strip()
-    }
 
     limit_recent = int(config.get("EML_LIMIT_RECENT", "0") or "0")
 
@@ -85,7 +79,6 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
             tid = thread_id_for(msg.message_id, msg.references)
             t8 = thread_stub(tid)
             YYYY, MM = date_shard(msg.date)
-            direction = _direction(msg.from_addr, owner_addrs)
             body = render_body(msg)
 
             # Resolve git blob from raw bytes (cheap, no subprocess)
@@ -151,7 +144,6 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                 msg,
                 tid,
                 thread_path,
-                direction,
                 body,
                 original_rel,
                 attachment_meta=attachment_meta,
@@ -191,12 +183,6 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
 
     import frontmatter as fm
 
-    owner_addrs = {
-        a.strip().lower()
-        for a in config.get("EML_OWNER_ADDRESSES", "").split(",")
-        if a.strip()
-    }
-
     messages_dir = store_path / "mail" / "messages"
     _, thread_membership = build_thread_membership(messages_dir)
 
@@ -234,7 +220,6 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
 
             tid = thread_id_for(msg.message_id, msg.references)
             t8 = thread_stub(tid)
-            direction = _direction(msg.from_addr, owner_addrs)
             body = render_body(msg)
 
             existing_members = thread_membership.get(tid, [])
@@ -257,7 +242,6 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
                 msg,
                 tid,
                 thread_path,
-                direction,
                 body,
                 original_rel,
                 source_path_rel_home=source_path_rel_home,
@@ -284,14 +268,3 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
     return updated
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _direction(from_addr: str, owner_addrs: set[str]) -> str:
-    if not owner_addrs:
-        return "unknown"
-    m = re.search(r"<([^>]+)>", from_addr)
-    addr = m.group(1).lower() if m else from_addr.lower()
-    return "outgoing" if addr in owner_addrs else "incoming"

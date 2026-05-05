@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from email.utils import getaddresses
 from pathlib import Path
 
 import frontmatter
@@ -9,7 +10,7 @@ import frontmatter
 from .parse import ParsedAttachment, ParsedMessage
 
 PLUGIN_NAME = "zkm-eml"
-PLUGIN_VERSION = "0.4.0"
+PLUGIN_VERSION = "0.5.0"
 
 
 def write_message_md(
@@ -17,7 +18,6 @@ def write_message_md(
     msg: ParsedMessage,
     thread_id: str,
     thread_path: str,
-    direction: str,
     body: str,
     original_path: str | None,
     attachment_meta: list[tuple[ParsedAttachment, str]] | None = None,
@@ -26,8 +26,6 @@ def write_message_md(
     source_blob: str | None = None,
 ) -> None:
     """Write (or overwrite) the markdown file for one message."""
-    participants = _collect_participants(msg)
-
     meta: dict = {
         "source": PLUGIN_NAME,
         "date": msg.date.isoformat(timespec="seconds"),
@@ -39,8 +37,7 @@ def write_message_md(
         "message_id": msg.raw_message_id,
         "thread_id": thread_id,
         "thread": thread_path,
-        "participants": participants,
-        "direction": direction,
+        "participants": _build_participants(msg),
         "subject": msg.subject,
     }
     if msg.in_reply_to:
@@ -80,11 +77,30 @@ def _att_entry(att: ParsedAttachment, rel_path: str) -> dict:
     }
 
 
-def _collect_participants(msg: ParsedMessage) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for addr in [msg.from_addr, *msg.to_addrs, *msg.cc_addrs]:
-        if addr and addr not in seen:
-            seen.add(addr)
-            result.append(addr)
+def _build_participants(msg: ParsedMessage) -> list[dict]:
+    """Build role-tagged participant list per messaging-spec."""
+    result: list[dict] = []
+    seen: set[tuple[str, str]] = set()  # (role, address) dedup
+
+    def _emit(addr_str: str, role: str) -> None:
+        for name, address in getaddresses([addr_str]):
+            address = address.lower().strip()
+            if not address or (role, address) in seen:
+                continue
+            seen.add((role, address))
+            entry: dict = {"address": address}
+            if name.strip():
+                entry["name"] = name.strip()
+            entry["role"] = role
+            result.append(entry)
+
+    _emit(msg.from_addr, "from")
+    if msg.reply_to and msg.reply_to != msg.from_addr:
+        _emit(msg.reply_to, "reply-to")
+    for addr in msg.to_addrs:
+        _emit(addr, "to")
+    for addr in msg.cc_addrs:
+        _emit(addr, "cc")
+    for addr in msg.bcc_addrs:
+        _emit(addr, "bcc")
     return result

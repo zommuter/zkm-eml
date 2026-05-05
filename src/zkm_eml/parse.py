@@ -39,8 +39,10 @@ class ParsedMessage:
     date: datetime           # UTC-normalised send time
     subject: str
     from_addr: str           # "Name <addr>" or bare address
+    reply_to: str | None     # "Name <addr>" or bare address, or None
     to_addrs: list[str]
     cc_addrs: list[str]
+    bcc_addrs: list[str]     # usually only present in outgoing/Sent mail
     plain_body: str
     html_body: str
     has_attachments: bool
@@ -68,8 +70,11 @@ def parse_eml(path: Path) -> ParsedMessage:
     subject = str(msg.get("Subject") or "(no subject)").strip()
 
     from_addr = _format_addr(msg.get("From") or "")
+    reply_to_raw = (msg.get("Reply-To") or "").strip()
+    reply_to = _format_addr(reply_to_raw) if reply_to_raw else None
     to_addrs = _format_addr_list(msg.get("To") or "")
     cc_addrs = _format_addr_list(msg.get("Cc") or "")
+    bcc_addrs = _format_addr_list(msg.get("Bcc") or "")
 
     plain_body, html_body, attachments = _extract_parts(msg)
     # Mark which attachments are referenced by the HTML body (inline decoration)
@@ -86,8 +91,10 @@ def parse_eml(path: Path) -> ParsedMessage:
         date=date,
         subject=subject,
         from_addr=from_addr,
+        reply_to=reply_to,
         to_addrs=to_addrs,
         cc_addrs=cc_addrs,
+        bcc_addrs=bcc_addrs,
         plain_body=plain_body,
         html_body=html_body,
         has_attachments=bool(attachments),

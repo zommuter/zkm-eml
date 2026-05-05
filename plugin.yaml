@@ -1,5 +1,5 @@
 name: zkm-eml
-version: 0.2.1
+version: 0.5.0
 description: Convert Maildir or .eml files to markdown with thread modeling and attachment extraction.
 
 creates_dirs:
@@ -24,7 +24,7 @@ config:
   EML_OWNER_ADDRESSES:
     required: false
     default: ""
-    description: Comma-separated list of the store owner's email addresses, used to determine direction (incoming/outgoing).
+    description: Comma-separated list of the store owner's email addresses. Reserved for future use by search/UI (my-identities config); not consumed during convert.
   EML_ATTACHMENT_INBOX:
     required: false
     default: "true"
