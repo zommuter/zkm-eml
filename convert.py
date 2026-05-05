@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from zkm_eml.frontmatter import write_message_md
 from zkm_eml.naming import date_shard, message_slug, slugify, thread_stub, unique_path
-from zkm_eml.originals import resolve_source_meta, symlink_inbox, write_original
+from zkm_eml.originals import build_inbox_canonical_index, resolve_source_meta, symlink_inbox, write_original
 from zkm_eml.parse import parse_eml
 from zkm_eml.render import render_body
 from zkm_eml.source import default_exclude_folders, iter_messages
@@ -49,6 +49,7 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
         (store_path / d).mkdir(parents=True, exist_ok=True)
 
     existing_ids, thread_membership = build_thread_membership(messages_dir)
+    inbox_canonical = build_inbox_canonical_index(store_path)
     created: list[Path] = []
     touched_threads: set[str] = set()
 
@@ -132,9 +133,16 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                 attachment_meta = attachment_pairs if attachment_pairs else None
 
                 if attachment_inbox and attachment_pairs:
+                    msg_md_path = str(dest.relative_to(store_path))
                     for att, _ in attachment_pairs:
                         try:
-                            symlink_inbox(store_path, att, msg.date)
+                            symlink_inbox(
+                                store_path, att, msg.date,
+                                msg_md_path=msg_md_path,
+                                msg_sha256=msg.sha256,
+                                plugin_name="eml",
+                                canonical_index=inbox_canonical,
+                            )
                         except Exception as e:
                             print(f"WARN: inbox symlink failed for {att.filename}: {e}", file=sys.stderr)
 

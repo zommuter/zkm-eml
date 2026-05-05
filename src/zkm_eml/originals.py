@@ -191,30 +191,63 @@ def _git_head(repo: Path) -> str | None:
     return None
 
 
+def build_inbox_canonical_index(store_path: Path) -> dict[str, Path]:
+    """Scan existing inbox/mail symlinks to build sha256 -> canonical symlink path index."""
+    index: dict[str, Path] = {}
+    inbox_dir = store_path / "inbox" / "mail"
+    if not inbox_dir.exists():
+        return index
+    for link in inbox_dir.rglob("*"):
+        if not link.is_symlink() or link.name.endswith(".origin.json"):
+            continue
+        try:
+            parts = Path(os.readlink(link)).parts
+            if len(parts) >= 2:
+                sha = parts[-2] + parts[-1]
+                if len(sha) == 64 and sha not in index:
+                    index[sha] = link
+        except Exception:
+            pass
+    return index
+
+
 def symlink_inbox(
     store_path: Path,
     att: ParsedAttachment,
     msg_date,
+    msg_md_path: str,
+    msg_sha256: str,
+    plugin_name: str,
+    canonical_index: dict[str, Path],
 ) -> None:
-    """Create a deduplicated inbox/mail/YYYY/MM/ symlink for *att* pointing at its CAS object."""
+    """Create or update the canonical inbox/mail symlink and .origin.json sidecar for *att*."""
     from .naming import date_shard as _date_shard
+
+    sha = att.sha256
+    rel_target = Path("../../../..") / "mail" / "_objects" / sha[:2] / sha[2:]
+    _SIDECAR_SUFFIX = ".origin.json"
+
+    if sha in canonical_index:
+        canonical_link = canonical_index[sha]
+        sidecar_path = canonical_link.parent / (canonical_link.name + _SIDECAR_SUFFIX)
+        _merge_inbox_sidecar(sidecar_path, sha, msg_md_path, msg_sha256, plugin_name)
+        return
+
     YYYY, MM = _date_shard(msg_date)
     inbox_dir = store_path / "inbox" / "mail" / YYYY / MM
     inbox_dir.mkdir(parents=True, exist_ok=True)
-
-    sha = att.sha256
-    # Relative target from inbox/mail/YYYY/MM/ to mail/_objects/<aa>/<rest>
-    # up 4 levels (MM/ → YYYY/ → mail/ → inbox/) then mail/_objects/...
-    rel_target = Path("../../../..") / "mail" / "_objects" / sha[:2] / sha[2:]
 
     link_name = att.filename
     link_path = inbox_dir / link_name
 
     if link_path.is_symlink():
-        existing = os.readlink(link_path)
-        if Path(existing) == rel_target:
-            return  # already correct, dedup
-        # Different object with same name — suffix with sha prefix
+        existing = Path(os.readlink(link_path))
+        if existing == rel_target:
+            canonical_index[sha] = link_path
+            sidecar_path = link_path.parent / (link_path.name + _SIDECAR_SUFFIX)
+            _merge_inbox_sidecar(sidecar_path, sha, msg_md_path, msg_sha256, plugin_name)
+            return
+        # Name collision with different content — suffix with sha prefix.
         stem, _, ext = link_name.rpartition(".")
         if not stem:
             stem, ext = link_name, ""
@@ -223,7 +256,59 @@ def symlink_inbox(
         link_name = f"{stem}_{sha[:8]}{ext}"
         link_path = inbox_dir / link_name
         if link_path.is_symlink():
-            return  # already there
+            canonical_index[sha] = link_path
+            sidecar_path = link_path.parent / (link_path.name + _SIDECAR_SUFFIX)
+            _merge_inbox_sidecar(sidecar_path, sha, msg_md_path, msg_sha256, plugin_name)
+            return
 
-    if not link_path.exists():
-        link_path.symlink_to(rel_target)
+    link_path.symlink_to(rel_target)
+    canonical_index[sha] = link_path
+    sidecar_path = link_path.parent / (link_path.name + _SIDECAR_SUFFIX)
+    _write_inbox_sidecar(sidecar_path, sha, msg_md_path, msg_sha256, plugin_name)
+
+
+def _write_inbox_sidecar(
+    sidecar_path: Path,
+    sha: str,
+    msg_md_path: str,
+    msg_sha256: str,
+    plugin_name: str,
+) -> None:
+    data = {
+        "schema": 1,
+        "sha256": sha,
+        "producers": [{"plugin": plugin_name, "message": msg_md_path, "sha256": msg_sha256}],
+    }
+    _atomic_write_json(sidecar_path, data)
+
+
+def _merge_inbox_sidecar(
+    sidecar_path: Path,
+    sha: str,
+    msg_md_path: str,
+    msg_sha256: str,
+    plugin_name: str,
+) -> None:
+    new_producer = {"plugin": plugin_name, "message": msg_md_path, "sha256": msg_sha256}
+    if sidecar_path.exists():
+        try:
+            data = json.loads(sidecar_path.read_text(encoding="utf-8"))
+            producers = data.get("producers", [])
+            if not any(p.get("message") == msg_md_path for p in producers):
+                producers.append(new_producer)
+                producers.sort(key=lambda p: p.get("message", ""))
+            data["producers"] = producers
+        except Exception:
+            data = {"schema": 1, "sha256": sha, "producers": [new_producer]}
+    else:
+        data = {"schema": 1, "sha256": sha, "producers": [new_producer]}
+    _atomic_write_json(sidecar_path, data)
+
+
+def _atomic_write_json(path: Path, data: dict) -> None:
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        os.write(fd, json.dumps(data, indent=2).encode("utf-8"))
+    finally:
+        os.close(fd)
+    os.replace(tmp, path)

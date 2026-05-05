@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -195,6 +196,96 @@ def test_stripped_eml_has_stub_headers(store: Path):
     assert "X-Zkm-Detached-Sha256:" in content
     # The raw base64 PDF payload should not be present
     assert "JVBERi0xLjAKJSVFT0YK" not in content
+
+
+def test_inbox_sidecar_single_producer(store: Path):
+    """Each inbox symlink has a .origin.json sidecar with schema and producers."""
+    import shutil
+    src = store.parent / "eml_src"
+    src.mkdir()
+    shutil.copy(FIXTURES / "with_pdf.eml", src / "with_pdf.eml")
+
+    config = {
+        "EML_SOURCE_DIR": str(src),
+        "EML_KEEP_ORIGINALS": "true",
+        "EML_ATTACHMENT_INBOX": "true",
+    }
+    convert(store, config)
+
+    inbox_mail = store / "inbox" / "mail"
+    links = [p for p in inbox_mail.rglob("*") if p.is_symlink()]
+    assert len(links) == 1
+    link = links[0]
+    sidecar = link.parent / (link.name + ".origin.json")
+    assert sidecar.exists(), f"Missing sidecar for {link}"
+
+    data = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert data["schema"] == 1
+    sha = hashlib.sha256(link.resolve().read_bytes()).hexdigest()
+    assert data["sha256"] == sha
+    assert len(data["producers"]) == 1
+    p = data["producers"][0]
+    assert p["plugin"] == "eml"
+    assert p["message"].startswith("mail/messages/")
+    assert len(p["sha256"]) == 64
+
+
+def test_inbox_sidecar_multi_producer(store: Path):
+    """Same attachment in two messages → one symlink, sidecar lists both producers."""
+    import json as _json
+    import shutil
+    src = store.parent / "eml_src"
+    src.mkdir()
+    shutil.copy(FIXTURES / "with_pdf.eml", src / "with_pdf.eml")
+    shutil.copy(FIXTURES / "with_pdf_forwarded.eml", src / "with_pdf_forwarded.eml")
+
+    config = {
+        "EML_SOURCE_DIR": str(src),
+        "EML_KEEP_ORIGINALS": "true",
+        "EML_ATTACHMENT_INBOX": "true",
+    }
+    convert(store, config)
+
+    inbox_mail = store / "inbox" / "mail"
+    links = [p for p in inbox_mail.rglob("*") if p.is_symlink()]
+    assert len(links) == 1, f"Expected 1 canonical symlink, got {len(links)}: {links}"
+
+    link = links[0]
+    sidecar = link.parent / (link.name + ".origin.json")
+    assert sidecar.exists()
+
+    data = _json.loads(sidecar.read_text(encoding="utf-8"))
+    assert data["schema"] == 1
+    assert len(data["producers"]) == 2
+    messages = sorted(p["message"] for p in data["producers"])
+    assert all(m.startswith("mail/messages/") for m in messages)
+    assert all(len(p["sha256"]) == 64 for p in data["producers"])
+    # producers sorted by message path (ascending)
+    assert messages == sorted(messages)
+
+
+def test_inbox_sidecar_idempotent(store: Path):
+    """Re-running convert does not duplicate sidecar producers."""
+    import json as _json
+    import shutil
+    src = store.parent / "eml_src"
+    src.mkdir()
+    shutil.copy(FIXTURES / "with_pdf.eml", src / "with_pdf.eml")
+
+    config = {
+        "EML_SOURCE_DIR": str(src),
+        "EML_KEEP_ORIGINALS": "true",
+        "EML_ATTACHMENT_INBOX": "true",
+    }
+    convert(store, config)
+    convert(store, config)  # second run: message already seen, no new symlinks
+
+    inbox_mail = store / "inbox" / "mail"
+    links = [p for p in inbox_mail.rglob("*") if p.is_symlink()]
+    assert len(links) == 1
+    sidecar = links[0].parent / (links[0].name + ".origin.json")
+    data = _json.loads(sidecar.read_text(encoding="utf-8"))
+    assert len(data["producers"]) == 1  # not doubled
 
 
 def test_idempotent_with_attachments(store: Path):
