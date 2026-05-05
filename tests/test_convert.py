@@ -34,7 +34,7 @@ def test_convert_basic(store: Path):
         assert "thread_id" in post.metadata
         assert "thread" in post.metadata
         assert "processor" in post.metadata
-        assert post.metadata["processor_version"] == "0.2.0"
+        assert post.metadata["processor_version"] == "0.2.1"
 
 
 def test_convert_idempotent(store: Path):
@@ -101,6 +101,23 @@ def test_convert_direction_detection(store: Path):
         directions[subj] = post.metadata.get("direction", "unknown")
     assert directions.get("Hello Bob") == "outgoing"
     assert directions.get("Re: Hello Bob") == "incoming"
+
+
+def test_convert_progress_callback(store: Path):
+    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "false"}
+    calls: list[tuple[int, int | None, str]] = []
+    created = convert(store, config, progress=lambda c, t, m: calls.append((c, t, m)))
+    assert len(calls) > 0
+    currents = [c for c, _, _ in calls]
+    assert currents == sorted(currents)
+    # Every call reports a total and last call has current == total
+    totals = [t for _, t, _ in calls]
+    assert all(t is not None for t in totals)
+    assert calls[-1][0] == calls[-1][1]
+    # One call per file (including skipped / already-existing)
+    assert len(calls) == calls[-1][1]
+    # Progress items >= created (some may be skipped dupes)
+    assert len(calls) >= len(created)
 
 
 def test_reprocess_updates_existing(store: Path):

@@ -22,7 +22,7 @@ from zkm_eml.thread_index import regenerate_thread_index
 from zkm_eml.threading import thread_id_for
 
 
-def convert(store_path: Path, config: dict) -> list[Path]:
+def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
     src_raw = config.get("EML_SOURCE_DIR", "").strip()
     src = Path(src_raw).expanduser().resolve() if src_raw else Path.home() / "mail"
     if not src.exists():
@@ -52,19 +52,28 @@ def convert(store_path: Path, config: dict) -> list[Path]:
 
     # Resolve source git state once per run
     source_repo, source_repo_commit, _ = resolve_source_meta(src, b"")
-    # Dummy call just to get repo/commit; actual blob computed per message below
 
-    for eml_path in iter_messages(src, exclude_folders):
+    # Pre-pass for progress total (cheap directory walk, no file reads)
+    all_paths = list(iter_messages(src, exclude_folders))
+    total = len(all_paths)
+
+    for i, eml_path in enumerate(all_paths, 1):
         if not eml_path.is_file():
+            if progress:
+                progress(i, total, eml_path.name)
             continue
         try:
             raw = eml_path.read_bytes()
             msg = parse_eml(eml_path)
         except Exception as e:
             print(f"WARN: skipping {eml_path}: {e}", file=sys.stderr)
+            if progress:
+                progress(i, total, eml_path.name)
             continue
 
         if msg.message_id in existing_ids:
+            if progress:
+                progress(i, total, eml_path.name)
             continue
 
         tid = thread_id_for(msg.message_id, msg.references)
@@ -123,6 +132,8 @@ def convert(store_path: Path, config: dict) -> list[Path]:
         created.append(dest)
         existing_ids.add(msg.message_id)
         touched_threads.add(tid)
+        if progress:
+            progress(i, total, eml_path.name)
 
     for tid in touched_threads:
         regenerate_thread_index(store_path, tid)
@@ -130,7 +141,7 @@ def convert(store_path: Path, config: dict) -> list[Path]:
     return created
 
 
-def reprocess(store_path: Path, config: dict, existing: list[Path]) -> list[Path]:
+def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=None) -> list[Path]:
     """Re-derive markdown from stored originals. Called by zkm convert --reprocess."""
     originals_dir = store_path / "originals" / "mail"
     if not originals_dir.exists():
@@ -144,26 +155,35 @@ def reprocess(store_path: Path, config: dict, existing: list[Path]) -> list[Path
         if a.strip()
     }
 
+    total = len(existing)
     updated: list[Path] = []
     touched_threads: set[str] = set()
 
-    for md_path in existing:
+    for i, md_path in enumerate(existing, 1):
         try:
             post = fm.load(md_path)
         except Exception:
+            if progress:
+                progress(i, total, md_path.name)
             continue
 
         original_rel = post.metadata.get("original")
         if not original_rel:
+            if progress:
+                progress(i, total, md_path.name)
             continue
         orig_path = store_path / original_rel
         if not orig_path.exists():
+            if progress:
+                progress(i, total, md_path.name)
             continue
 
         try:
             msg = parse_eml(orig_path)
         except Exception as e:
             print(f"WARN: reprocess skipping {orig_path}: {e}", file=sys.stderr)
+            if progress:
+                progress(i, total, md_path.name)
             continue
 
         tid = thread_id_for(msg.message_id, msg.references)
@@ -189,6 +209,8 @@ def reprocess(store_path: Path, config: dict, existing: list[Path]) -> list[Path
         )
         updated.append(md_path)
         touched_threads.add(tid)
+        if progress:
+            progress(i, total, md_path.name)
 
     for tid in touched_threads:
         regenerate_thread_index(store_path, tid)
