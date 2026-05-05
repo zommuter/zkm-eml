@@ -57,86 +57,88 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
     all_paths = list(iter_messages(src, exclude_folders))
     total = len(all_paths)
 
-    for i, eml_path in enumerate(all_paths, 1):
-        if not eml_path.is_file():
-            if progress:
-                progress(i, total, eml_path.name)
-            continue
-        try:
-            raw = eml_path.read_bytes()
-            msg = parse_eml(eml_path)
-        except Exception as e:
-            print(f"WARN: skipping {eml_path}: {e}", file=sys.stderr)
-            if progress:
-                progress(i, total, eml_path.name)
-            continue
+    try:
+        for i, eml_path in enumerate(all_paths, 1):
+            if not eml_path.is_file():
+                if progress:
+                    progress(i, total, eml_path.name)
+                continue
+            try:
+                raw = eml_path.read_bytes()
+                msg = parse_eml(eml_path)
+            except Exception as e:
+                print(f"WARN: skipping {eml_path}: {e}", file=sys.stderr)
+                if progress:
+                    progress(i, total, eml_path.name)
+                continue
 
-        if msg.message_id in existing_ids:
-            if progress:
-                progress(i, total, eml_path.name)
-            continue
+            if msg.message_id in existing_ids:
+                if progress:
+                    progress(i, total, eml_path.name)
+                continue
 
-        tid = thread_id_for(msg.message_id, msg.references)
-        thread_path = f"mail/threads/{tid}.md"
-        direction = _direction(msg.from_addr, owner_addrs)
-        body = render_body(msg)
+            tid = thread_id_for(msg.message_id, msg.references)
+            thread_path = f"mail/threads/{tid}.md"
+            direction = _direction(msg.from_addr, owner_addrs)
+            body = render_body(msg)
 
-        # Resolve git blob from raw bytes (cheap, no subprocess)
-        from zkm_eml.originals import git_blob_sha1
-        source_blob = git_blob_sha1(raw)
+            # Resolve git blob from raw bytes (cheap, no subprocess)
+            from zkm_eml.originals import git_blob_sha1
+            source_blob = git_blob_sha1(raw)
 
-        home = Path.home()
-        try:
-            src_rel_home = str(eml_path.relative_to(home))
-        except ValueError:
-            src_rel_home = None
+            home = Path.home()
+            try:
+                src_rel_home = str(eml_path.relative_to(home))
+            except ValueError:
+                src_rel_home = None
 
-        original_rel: str | None = None
-        attachment_meta = None
+            original_rel: str | None = None
+            attachment_meta = None
 
-        if keep_originals:
-            msg_slug = _resolve_orig_slug(store_path, msg)
-            original_rel, attachment_pairs = write_original(
-                store_path,
+            if keep_originals:
+                msg_slug = _resolve_orig_slug(store_path, msg)
+                original_rel, attachment_pairs = write_original(
+                    store_path,
+                    msg,
+                    raw,
+                    msg_slug,
+                    source_repo,
+                    source_repo_commit,
+                    source_blob,
+                )
+                attachment_meta = attachment_pairs if attachment_pairs else None
+
+                if attachment_inbox and attachment_pairs:
+                    for att, _ in attachment_pairs:
+                        try:
+                            symlink_inbox(store_path, att)
+                        except Exception as e:
+                            print(f"WARN: inbox symlink failed for {att.filename}: {e}", file=sys.stderr)
+
+            dest = unique_path(messages_dir, f"{msg.date.strftime('%Y-%m-%d')}_{slugify(msg.subject)}")
+            write_message_md(
+                dest,
                 msg,
-                raw,
-                msg_slug,
-                source_repo,
-                source_repo_commit,
-                source_blob,
+                tid,
+                thread_path,
+                direction,
+                body,
+                original_rel,
+                attachment_meta=attachment_meta,
+                source_path_rel_home=src_rel_home,
+                source_repo_commit=source_repo_commit,
+                source_blob=source_blob,
             )
-            attachment_meta = attachment_pairs if attachment_pairs else None
 
-            if attachment_inbox and attachment_pairs:
-                for att, _ in attachment_pairs:
-                    try:
-                        symlink_inbox(store_path, att)
-                    except Exception as e:
-                        print(f"WARN: inbox symlink failed for {att.filename}: {e}", file=sys.stderr)
-
-        dest = unique_path(messages_dir, f"{msg.date.strftime('%Y-%m-%d')}_{slugify(msg.subject)}")
-        write_message_md(
-            dest,
-            msg,
-            tid,
-            thread_path,
-            direction,
-            body,
-            original_rel,
-            attachment_meta=attachment_meta,
-            source_path_rel_home=src_rel_home,
-            source_repo_commit=source_repo_commit,
-            source_blob=source_blob,
-        )
-
-        created.append(dest)
-        existing_ids.add(msg.message_id)
-        touched_threads.add(tid)
-        if progress:
-            progress(i, total, eml_path.name)
-
-    for tid in touched_threads:
-        regenerate_thread_index(store_path, tid)
+            created.append(dest)
+            existing_ids.add(msg.message_id)
+            touched_threads.add(tid)
+            if progress:
+                progress(i, total, eml_path.name)
+    finally:
+        # Regenerate indexes for every thread touched so far, even on cancel.
+        for tid in touched_threads:
+            regenerate_thread_index(store_path, tid)
 
     return created
 
@@ -159,61 +161,62 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
     updated: list[Path] = []
     touched_threads: set[str] = set()
 
-    for i, md_path in enumerate(existing, 1):
-        try:
-            post = fm.load(md_path)
-        except Exception:
+    try:
+        for i, md_path in enumerate(existing, 1):
+            try:
+                post = fm.load(md_path)
+            except Exception:
+                if progress:
+                    progress(i, total, md_path.name)
+                continue
+
+            original_rel = post.metadata.get("original")
+            if not original_rel:
+                if progress:
+                    progress(i, total, md_path.name)
+                continue
+            orig_path = store_path / original_rel
+            if not orig_path.exists():
+                if progress:
+                    progress(i, total, md_path.name)
+                continue
+
+            try:
+                msg = parse_eml(orig_path)
+            except Exception as e:
+                print(f"WARN: reprocess skipping {orig_path}: {e}", file=sys.stderr)
+                if progress:
+                    progress(i, total, md_path.name)
+                continue
+
+            tid = thread_id_for(msg.message_id, msg.references)
+            thread_path = f"mail/threads/{tid}.md"
+            direction = _direction(msg.from_addr, owner_addrs)
+            body = render_body(msg)
+
+            source_blob = post.metadata.get("source_blob")
+            source_repo_commit = post.metadata.get("source_repo_commit")
+            source_path_rel_home = post.metadata.get("source_path")
+
+            write_message_md(
+                md_path,
+                msg,
+                tid,
+                thread_path,
+                direction,
+                body,
+                original_rel,
+                source_path_rel_home=source_path_rel_home,
+                source_repo_commit=source_repo_commit,
+                source_blob=source_blob,
+            )
+            updated.append(md_path)
+            touched_threads.add(tid)
             if progress:
                 progress(i, total, md_path.name)
-            continue
-
-        original_rel = post.metadata.get("original")
-        if not original_rel:
-            if progress:
-                progress(i, total, md_path.name)
-            continue
-        orig_path = store_path / original_rel
-        if not orig_path.exists():
-            if progress:
-                progress(i, total, md_path.name)
-            continue
-
-        try:
-            msg = parse_eml(orig_path)
-        except Exception as e:
-            print(f"WARN: reprocess skipping {orig_path}: {e}", file=sys.stderr)
-            if progress:
-                progress(i, total, md_path.name)
-            continue
-
-        tid = thread_id_for(msg.message_id, msg.references)
-        thread_path = f"mail/threads/{tid}.md"
-        direction = _direction(msg.from_addr, owner_addrs)
-        body = render_body(msg)
-
-        source_blob = post.metadata.get("source_blob")
-        source_repo_commit = post.metadata.get("source_repo_commit")
-        source_path_rel_home = post.metadata.get("source_path")
-
-        write_message_md(
-            md_path,
-            msg,
-            tid,
-            thread_path,
-            direction,
-            body,
-            original_rel,
-            source_path_rel_home=source_path_rel_home,
-            source_repo_commit=source_repo_commit,
-            source_blob=source_blob,
-        )
-        updated.append(md_path)
-        touched_threads.add(tid)
-        if progress:
-            progress(i, total, md_path.name)
-
-    for tid in touched_threads:
-        regenerate_thread_index(store_path, tid)
+    finally:
+        for tid in touched_threads:
+            regenerate_thread_index(store_path, tid)
 
     return updated
 
