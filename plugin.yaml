@@ -1,0 +1,21 @@
+name: zkm-eml
+version: 0.1.0
+description: Convert .eml files (e.g. from mbsync Maildir) to markdown with thread modeling.
+
+creates_dirs:
+  - mail/messages
+  - mail/threads
+  - originals/mail
+
+config:
+  EML_SOURCE_DIR:
+    required: true
+    description: Directory containing .eml files to import (scanned recursively). Point at mbsync's Maildir.
+  EML_KEEP_ORIGINALS:
+    required: false
+    default: "true"
+    description: Copy each .eml into originals/mail/ for reproducibility and --reprocess support.
+  EML_OWNER_ADDRESSES:
+    required: false
+    default: ""
+    description: Comma-separated list of the store owner's email addresses, used to determine direction (incoming/outgoing).

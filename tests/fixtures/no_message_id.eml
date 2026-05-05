@@ -1,0 +1,9 @@
+From: Eve <eve@example.com>
+To: Frank <frank@example.com>
+Subject: No Message-ID here
+Date: Wed, 15 Apr 2026 10:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+This message has no Message-ID header.
+The parser should synthesize one.
