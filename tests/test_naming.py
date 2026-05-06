@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
+import sys
 from datetime import datetime, timezone
 
 from zkm_eml.naming import date_shard, message_slug, slugify, thread_stub
@@ -66,3 +68,30 @@ def test_thread_stub_first_eight():
 
 def test_thread_stub_short_id():
     assert thread_stub("abcd") == "abcd"
+
+
+def test_slugify_nfc_normalize():
+    # NFD-encoded ü (u + combining diaeresis) should be NFC-normalized and kept
+    nfd_u_umlaut = "über"  # u + combining diaeresis + ber
+    result = slugify(nfd_u_umlaut)
+    assert result == "über"
+
+
+def test_slugify_keeps_unicode_by_default():
+    assert slugify("Grüße aus Berlin") == "grüße-aus-berlin"
+
+
+def test_slugify_ascii_fold_when_env_set(monkeypatch):
+    monkeypatch.setenv("EML_SLUG_ASCII", "true")
+    # Reload naming module so the env var is picked up
+    import zkm_eml.naming as naming_mod
+    importlib.reload(naming_mod)
+    try:
+        result = naming_mod.slugify("Grüße aus Berlin")
+        assert "ü" not in result
+        assert "ß" not in result
+        # NFKD: ü → u+combining-diaeresis → "u"; ß has no ASCII form → dropped
+        assert "grue" in result
+    finally:
+        monkeypatch.delenv("EML_SLUG_ASCII", raising=False)
+        importlib.reload(naming_mod)

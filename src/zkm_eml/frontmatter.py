@@ -10,7 +10,7 @@ import frontmatter
 from .parse import ParsedAttachment, ParsedMessage
 
 PLUGIN_NAME = "zkm-eml"
-PLUGIN_VERSION = "0.5.0"
+PLUGIN_VERSION = "0.6.0"
 
 
 def write_message_md(
@@ -65,7 +65,7 @@ def write_message_md(
 
 def _att_entry(att: ParsedAttachment, rel_path: str) -> dict:
     sha = att.sha256
-    return {
+    entry: dict = {
         "filename": att.filename,
         "content_type": att.content_type,
         "size": att.size,
@@ -75,6 +75,9 @@ def _att_entry(att: ParsedAttachment, rel_path: str) -> dict:
         "inline": att.is_inline,
         "cid_referenced": att.referenced_in_html,
     }
+    if att.filename_raw and att.filename_raw != att.filename:
+        entry["filename_raw"] = att.filename_raw
+    return entry
 
 
 def _build_participants(msg: ParsedMessage) -> list[dict]:

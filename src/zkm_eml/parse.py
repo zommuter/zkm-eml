@@ -3,23 +3,26 @@
 from __future__ import annotations
 
 import email
-import email.headerregistry
+import email.header
 import email.policy
 import hashlib
 import mimetypes
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.message import EmailMessage
-from email.utils import parsedate_to_datetime
+from email.utils import getaddresses, parsedate_to_datetime
 from pathlib import Path
+
 
 from .naming import sanitize_filename
 
 
 @dataclass
 class ParsedAttachment:
-    filename: str              # sanitized, collision-safe within the message
+    filename: str              # sanitized, NFC-normalized, collision-safe within the message
+    filename_raw: str          # pre-sanitize value from get_filename() for forensic re-decode
     content_type: str          # e.g. "application/pdf"
     content_id: str | None     # cid: reference if present
     is_inline: bool            # Content-Disposition: inline
@@ -67,7 +70,7 @@ def parse_eml(path: Path) -> ParsedMessage:
     references = [_strip_angles(r) for r in raw_refs.split() if r.strip()] if raw_refs else []
 
     date = _parse_date(msg.get("Date") or "")
-    subject = str(msg.get("Subject") or "(no subject)").strip()
+    subject = _decode_header_str(msg.get("Subject")) or "(no subject)"
 
     from_addr = _format_addr(msg.get("From") or "")
     reply_to_raw = (msg.get("Reply-To") or "").strip()
@@ -113,6 +116,16 @@ def _strip_angles(s: str) -> str:
     return s.strip().strip("<>").strip()
 
 
+def _decode_header_str(value: str | None) -> str:
+    """Defensive RFC 2047 decode — idempotent on already-decoded strings."""
+    if not value:
+        return ""
+    try:
+        return str(email.header.make_header(email.header.decode_header(value)))
+    except Exception:
+        return str(value)
+
+
 def _synthetic_id(raw: bytes) -> str:
     return f"synthetic-{hashlib.sha256(raw[:4096]).hexdigest()[:32]}"
 
@@ -129,27 +142,22 @@ def _parse_date(date_str: str) -> datetime:
         return datetime.now(tz=timezone.utc)
 
 
-def _format_addr(header_val: str) -> str:
-    if not header_val:
-        return ""
-    try:
-        addr = email.headerregistry.Address(addr_spec=header_val.strip())
-        if addr.display_name:
-            return f"{addr.display_name} <{addr.addr_spec}>"
-        return addr.addr_spec
-    except Exception:
-        return header_val.strip()
-
-
 def _format_addr_list(header_val: str) -> list[str]:
     if not header_val:
         return []
-    results = []
-    for part in re.split(r",\s*", header_val.strip()):
-        part = part.strip()
-        if part:
-            results.append(_format_addr(part))
-    return results
+    out = []
+    for raw_name, addr in getaddresses([header_val]):
+        name = _decode_header_str(raw_name).strip()
+        addr = addr.strip()
+        if not addr and not name:
+            continue
+        out.append(f"{name} <{addr}>" if name else addr)
+    return out
+
+
+def _format_addr(header_val: str) -> str:
+    addrs = _format_addr_list(header_val)
+    return addrs[0] if addrs else ""
 
 
 _MULTIPART_TYPES = frozenset({
@@ -188,10 +196,11 @@ def _extract_parts(msg: EmailMessage) -> tuple[str, str, list[ParsedAttachment]]
             if not raw_payload:
                 continue
 
-            raw_filename = part.get_filename() or ""
+            raw_filename_raw = part.get_filename() or ""
+            raw_filename = _decode_header_str(raw_filename_raw)
             ext = mimetypes.guess_extension(content_type.split(";")[0].strip()) or ""
             fallback = f"part-{idx}{ext}"
-            base_name = sanitize_filename(raw_filename, fallback)
+            base_name = unicodedata.normalize("NFC", sanitize_filename(raw_filename, fallback))
             # Collision-suffix within this message
             filename = _unique_filename(base_name, seen_filenames)
             seen_filenames.add(filename)
@@ -202,6 +211,7 @@ def _extract_parts(msg: EmailMessage) -> tuple[str, str, list[ParsedAttachment]]
 
             attachments.append(ParsedAttachment(
                 filename=filename,
+                filename_raw=raw_filename_raw,
                 content_type=content_type,
                 content_id=cid,
                 is_inline=is_inline,
@@ -234,11 +244,21 @@ def _unique_filename(name: str, seen: set[str]) -> str:
 
 
 def _decode_part(part: EmailMessage) -> str:
-    try:
-        payload = part.get_payload(decode=True)
-        if not isinstance(payload, bytes):
-            return ""
-        charset = part.get_content_charset() or "utf-8"
-        return payload.decode(charset, errors="replace")
-    except Exception:
+    payload = part.get_payload(decode=True)
+    if not isinstance(payload, bytes):
         return ""
+    declared = part.get_content_charset()
+    candidates: list[str] = []
+    if declared:
+        candidates.append(declared)
+    elif part.get_content_type() == "text/html":
+        m = re.search(rb'charset=["\']?([\w\-]+)', payload[:1024], re.IGNORECASE)
+        if m:
+            candidates.append(m.group(1).decode("ascii", errors="ignore"))
+    candidates.extend(["utf-8", "cp1252", "latin-1"])
+    for cs in candidates:
+        try:
+            return payload.decode(cs)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return payload.decode("utf-8", errors="replace")

@@ -57,10 +57,10 @@ def test_cas_object_written(store: Path):
     objects_dir = store / "mail" / "_objects"
     assert objects_dir.exists()
     objects = list(objects_dir.rglob("*"))
-    cas_files = [p for p in objects if p.is_file()]
+    cas_files = [p for p in objects if p.is_file() and not p.suffix == ".json"]
     assert len(cas_files) > 0
 
-    # Verify CAS file content integrity
+    # Verify CAS file content integrity (sidecars excluded)
     for cas_file in cas_files:
         payload = cas_file.read_bytes()
         sha = hashlib.sha256(payload).hexdigest()
@@ -85,7 +85,7 @@ def test_cas_deduplication(store: Path):
     convert(store, config)
 
     objects_dir = store / "mail" / "_objects"
-    cas_files = [p for p in objects_dir.rglob("*") if p.is_file()]
+    cas_files = [p for p in objects_dir.rglob("*") if p.is_file() and not p.suffix == ".json"]
     # Both messages share the same PDF payload — only one CAS object
     assert len(cas_files) == 1
 
@@ -303,3 +303,107 @@ def test_idempotent_with_attachments(store: Path):
     # Second run doesn't create extra objects
     objects_after = list((store / "mail" / "_objects").rglob("*"))
     assert len(objects_before) == len(objects_after)
+
+
+def test_per_message_attachment_sidecar_written(store: Path):
+    """Each per-message symlink gets a .json sidecar with attachment metadata."""
+    import shutil
+    src = store.parent / "eml_src"
+    src.mkdir()
+    shutil.copy(FIXTURES / "with_pdf.eml", src / "with_pdf.eml")
+
+    config = {
+        "EML_SOURCE_DIR": str(src),
+        "EML_KEEP_ORIGINALS": "true",
+        "EML_ATTACHMENT_INBOX": "false",
+    }
+    convert(store, config)
+
+    originals_mail = store / "originals" / "mail"
+    sidecars = [p for p in originals_mail.rglob("*.json") if not p.name.endswith(".source.json")]
+    assert len(sidecars) == 1, f"Expected 1 attachment sidecar, found: {sidecars}"
+
+    data = json.loads(sidecars[0].read_text(encoding="utf-8"))
+    assert data["schema"] == 1
+    assert data["filename"] == "invoice.pdf"
+    assert len(data["sha256"]) == 64
+    assert data["content_type"] == "application/pdf"
+    assert data["size"] > 0
+    assert data["object"].startswith("mail/_objects/")
+
+
+def test_cas_object_sidecar_single_producer(store: Path):
+    """A per-CAS sidecar is written next to each _objects payload."""
+    import shutil
+    src = store.parent / "eml_src"
+    src.mkdir()
+    shutil.copy(FIXTURES / "with_pdf.eml", src / "with_pdf.eml")
+
+    config = {
+        "EML_SOURCE_DIR": str(src),
+        "EML_KEEP_ORIGINALS": "true",
+        "EML_ATTACHMENT_INBOX": "false",
+    }
+    convert(store, config)
+
+    objects_dir = store / "mail" / "_objects"
+    json_sidecars = [p for p in objects_dir.rglob("*.json")]
+    assert len(json_sidecars) == 1
+
+    data = json.loads(json_sidecars[0].read_text(encoding="utf-8"))
+    assert data["schema"] == 1
+    assert len(data["sha256"]) == 64
+    assert data["size"] > 0
+    assert len(data["producers"]) == 1
+    p = data["producers"][0]
+    assert p["message"].startswith("mail/messages/")
+    assert p["filename"] == "invoice.pdf"
+    assert "application/pdf" in data["content_types"]
+    assert "invoice.pdf" in data["filenames"]
+
+
+def test_cas_object_sidecar_multi_producer(store: Path):
+    """Same attachment in two messages → CAS sidecar lists both producers."""
+    import shutil
+    src = store.parent / "eml_src"
+    src.mkdir()
+    shutil.copy(FIXTURES / "with_pdf.eml", src / "with_pdf.eml")
+    shutil.copy(FIXTURES / "with_pdf_forwarded.eml", src / "with_pdf_forwarded.eml")
+
+    config = {
+        "EML_SOURCE_DIR": str(src),
+        "EML_KEEP_ORIGINALS": "true",
+        "EML_ATTACHMENT_INBOX": "false",
+    }
+    convert(store, config)
+
+    objects_dir = store / "mail" / "_objects"
+    json_sidecars = [p for p in objects_dir.rglob("*.json")]
+    assert len(json_sidecars) == 1
+
+    data = json.loads(json_sidecars[0].read_text(encoding="utf-8"))
+    assert len(data["producers"]) == 2
+    messages = sorted(p["message"] for p in data["producers"])
+    assert all(m.startswith("mail/messages/") for m in messages)
+
+
+def test_cas_object_sidecar_idempotent(store: Path):
+    """Re-running convert does not duplicate CAS sidecar producers."""
+    import shutil
+    src = store.parent / "eml_src"
+    src.mkdir()
+    shutil.copy(FIXTURES / "with_pdf.eml", src / "with_pdf.eml")
+
+    config = {
+        "EML_SOURCE_DIR": str(src),
+        "EML_KEEP_ORIGINALS": "true",
+        "EML_ATTACHMENT_INBOX": "false",
+    }
+    convert(store, config)
+    convert(store, config)  # second run: message already seen
+
+    objects_dir = store / "mail" / "_objects"
+    json_sidecars = [p for p in objects_dir.rglob("*.json")]
+    assert len(json_sidecars) == 1
+    data = json.loads(json_sidecars[0].read_text(encoding="utf-8"))
+    assert len(data["producers"]) == 1  # not doubled

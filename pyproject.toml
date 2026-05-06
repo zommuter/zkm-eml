@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zkm-eml"
-version = "0.1.0"
+version = "0.6.0"
 description = "zkm plugin: convert .eml files to markdown with thread modeling"
 requires-python = ">=3.11"
 dependencies = [

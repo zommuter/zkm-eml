@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import os
 import re
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
+_SLUG_ASCII = os.environ.get("EML_SLUG_ASCII", "").lower() in {"1", "true", "yes"}
+
 
 def slugify(s: str) -> str:
+    s = unicodedata.normalize("NFC", s)
+    if _SLUG_ASCII:
+        s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
     s = re.sub(r"^(re|aw|fwd|fw):\s*", "", s.lower().strip())
     s = re.sub(r"[^\w\- ]+", "", s)
     s = re.sub(r"[\s_]+", "-", s).strip("-")
@@ -52,6 +59,7 @@ def unique_path(directory: Path, stem: str, suffix: str = ".md") -> Path:
 
 
 def sanitize_filename(name: str, fallback: str = "attachment") -> str:
+    name = unicodedata.normalize("NFC", name)
     name = re.sub(r"[/\\]", "_", name)
     name = re.sub(r"[\x00-\x1f]", "", name)
     name = name.lstrip(".")

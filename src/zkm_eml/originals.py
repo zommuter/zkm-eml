@@ -66,6 +66,7 @@ def write_original(
 
     # --- Write CAS objects and per-message symlinks ---
     attachment_pairs: list[tuple[ParsedAttachment, str]] = []
+    msg_md_rel = f"mail/messages/{YYYY}/{MM}/{msg_stem}.md"
     if msg.attachments:
         msg_dir.mkdir(exist_ok=True)
         seen_names: set[str] = set()
@@ -82,6 +83,14 @@ def write_original(
                 link_path.symlink_to(rel_target)
             symlink_rel = str((msg_dir / link_name).relative_to(store_path))
             attachment_pairs.append((att, symlink_rel))
+
+            # Per-message-attachment sidecar
+            att_sidecar_path = msg_dir / f"{link_name}.json"
+            _write_att_sidecar(att_sidecar_path, att, link_name, obj_rel)
+
+            # Per-CAS-object sidecar
+            cas_sidecar_path = objects_dir / f"{att.sha256[:2]}/{att.sha256[2:]}.json"
+            _merge_cas_sidecar(cas_sidecar_path, att, link_name, msg_md_rel)
 
     # --- Write stripped .eml ---
     stripped = _strip_eml(raw_eml, msg.attachments, msg_stem)
@@ -126,6 +135,71 @@ def _write_cas_object(objects_dir: Path, att: ParsedAttachment) -> str:
             os.close(fd)
         os.replace(tmp, obj_path)
     return f"{sha[:2]}/{sha[2:]}"
+
+
+def _write_att_sidecar(
+    sidecar_path: Path,
+    att: ParsedAttachment,
+    link_name: str,
+    obj_rel: str,
+) -> None:
+    """Write per-message-attachment sidecar next to the per-message symlink."""
+    data = {
+        "schema": 1,
+        "filename": link_name,
+        "filename_raw": att.filename_raw,
+        "content_type": att.content_type,
+        "content_id": att.content_id,
+        "is_inline": att.is_inline,
+        "cid_referenced_in_html": att.referenced_in_html,
+        "part_index": att.part_index,
+        "size": att.size,
+        "sha256": att.sha256,
+        "object": f"mail/_objects/{obj_rel}",
+    }
+    _atomic_write_json(sidecar_path, data)
+
+
+def _merge_cas_sidecar(
+    sidecar_path: Path,
+    att: ParsedAttachment,
+    link_name: str,
+    msg_md_rel: str,
+) -> None:
+    """Write or update the per-CAS-object sidecar listing all producing messages."""
+    new_producer = {"message": msg_md_rel, "filename": link_name}
+    if sidecar_path.exists():
+        try:
+            data = json.loads(sidecar_path.read_text(encoding="utf-8"))
+            producers = data.get("producers", [])
+            if not any(p.get("message") == msg_md_rel for p in producers):
+                producers.append(new_producer)
+                producers.sort(key=lambda p: p.get("message", ""))
+            data["producers"] = producers
+            filenames: list[str] = data.get("filenames", [])
+            if link_name not in filenames:
+                filenames.append(link_name)
+            data["filenames"] = filenames
+            content_types: list[str] = data.get("content_types", [])
+            if att.content_type not in content_types:
+                content_types.append(att.content_type)
+            data["content_types"] = content_types
+        except Exception:
+            data = _new_cas_sidecar(att, link_name, new_producer)
+    else:
+        data = _new_cas_sidecar(att, link_name, new_producer)
+    _atomic_write_json(sidecar_path, data)
+
+
+def _new_cas_sidecar(att: ParsedAttachment, link_name: str, producer: dict) -> dict:
+    return {
+        "schema": 1,
+        "sha256": att.sha256,
+        "size": att.size,
+        "content_types": [att.content_type],
+        "filenames": [link_name],
+        "producers": [producer],
+    }
 
 
 def _strip_eml(raw_eml: bytes, attachments: list[ParsedAttachment], msg_slug: str) -> bytes:

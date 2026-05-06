@@ -1,0 +1,10 @@
+From: alice@example.com
+To: bob@example.com
+Subject: Windows-1252 body
+Date: Mon, 13 Apr 2026 10:00:00 +0200
+Message-ID: <windows1252-body-001@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=windows-1252
+Content-Transfer-Encoding: quoted-printable
+
+Gesch=E4ftsbericht 2026: Umsatz =FCber Erwarten, Gewinn =E4u=DFerst positiv.
