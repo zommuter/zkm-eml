@@ -12,7 +12,6 @@
 - [ ] Update installed plugin copy in ~/src/zkm/plugins/zkm-zkm-eml to v0.6 (was v0.5)
 - [ ] CLAUDE.md: update architecture diagram and "Filename convention" section for v0.4 layout; document EML_LIMIT_RECENT, EML_SLUG_ASCII, and v0.6 sidecar files
 - [ ] Run --reprocess on ~/knowledge to rewrite all existing md files with role-tagged participants + mojibake fixes + attachment sidecars (v0.5→v0.6 schema change)
-- [ ] _objects GC: can now walk mail/_objects/<aa>/<rest>.json producer lists to find unreferenced CAS objects (sidecars land in v0.6)
 
 ## Done
 - [x] v0.1 EML to markdown with thread modeling — covered by tests (test_convert.py, test_parse.py, test_threading.py) on 2026-05-05
