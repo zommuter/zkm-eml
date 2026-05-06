@@ -1,5 +1,5 @@
 name: zkm-eml
-version: 0.5.0
+version: 0.6.0
 description: Convert Maildir or .eml files to markdown with thread modeling and attachment extraction.
 
 creates_dirs:
