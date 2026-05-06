@@ -6,6 +6,7 @@
 - [ ] Deleted-mail policy: detect removals from ~/mail between runs; options: always-keep (default), purge, archive-only
 - [ ] Drafts: optional "follow draft updates" mode (Message-ID/content changes on each save) — YAGNI for now
 - [ ] `_objects` GC: walk `mail/_objects/<aa>/<rest>.json` producer lists, prune CAS objects and sidecars whose producers all reference deleted messages
+- [ ] Backfill per-attachment and per-CAS sidecars for existing _objects: walk originals/mail/*/*/<stem>/ symlinks, re-read source EML (via source.json → source_path), re-extract attachment payloads to regenerate sha256 and write missing .json sidecars; gated on source still being accessible
 - [ ] v0.5 quote stripping: detect and collapse full-quote blocks; trigger via --reprocess. Design sketch in CLAUDE.md.
 - [ ] SHA-256 git repo support: auto-detect via `git rev-parse --show-object-format`; fall back to subprocess for source_blob
 - [ ] Attachment MIME type refinement: use python-magic for more accurate typing of synthesized filenames
