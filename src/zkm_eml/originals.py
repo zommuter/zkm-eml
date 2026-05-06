@@ -386,3 +386,92 @@ def _atomic_write_json(path: Path, data: dict) -> None:
     finally:
         os.close(fd)
     os.replace(tmp, path)
+
+
+def backfill_sidecars(store_path: Path) -> tuple[int, int]:
+    """Backfill per-attachment and per-CAS sidecars for existing originals.
+
+    Walks originals/mail/*/*/<stem>/ symlink dirs, re-parses each source EML,
+    matches attachments by sha256, and writes any missing sidecar files.
+
+    Returns (att_sidecars_written, cas_sidecars_merged).
+    """
+    from .parse import parse_eml
+
+    originals_dir = store_path / "originals" / "mail"
+    objects_dir = store_path / "mail" / "_objects"
+    att_written = 0
+    cas_merged = 0
+
+    for source_json in sorted(originals_dir.rglob("*.source.json")):
+        stem = source_json.name[: -len(".source.json")]
+        msg_dir = source_json.parent / stem
+        if not msg_dir.is_dir():
+            continue  # no attachments for this message
+
+        try:
+            source_data = json.loads(source_json.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        eml_path = _resolve_source(source_data)
+        if eml_path is None:
+            continue
+
+        try:
+            msg = parse_eml(eml_path)
+        except Exception as e:
+            print(f"WARN: cannot parse {eml_path}: {e}", flush=True)
+            continue
+
+        att_by_sha = {att.sha256: att for att in msg.attachments}
+
+        # Derive mail/messages/YYYY/MM/<stem>.md relative path
+        rel_parts = msg_dir.relative_to(originals_dir).parts  # (YYYY, MM, stem)
+        if len(rel_parts) != 3:
+            continue
+        YYYY, MM, stem_name = rel_parts
+        msg_md_rel = f"mail/messages/{YYYY}/{MM}/{stem_name}.md"
+
+        for link in sorted(msg_dir.iterdir()):
+            if not link.is_symlink() or link.name.endswith(".json"):
+                continue
+
+            # Recover sha256 from symlink target: .../mail/_objects/<aa>/<rest>
+            try:
+                target_parts = Path(os.readlink(link)).parts
+                sha = target_parts[-2] + target_parts[-1]
+                if len(sha) != 64:
+                    continue
+            except Exception:
+                continue
+
+            att = att_by_sha.get(sha)
+            if att is None:
+                continue
+
+            link_name = link.name
+            obj_rel = f"{sha[:2]}/{sha[2:]}"
+
+            att_sidecar = msg_dir / f"{link_name}.json"
+            if not att_sidecar.exists():
+                _write_att_sidecar(att_sidecar, att, link_name, obj_rel)
+                att_written += 1
+
+            cas_sidecar = objects_dir / f"{sha[:2]}/{sha[2:]}.json"
+            _merge_cas_sidecar(cas_sidecar, att, link_name, msg_md_rel)
+            cas_merged += 1
+
+    return att_written, cas_merged
+
+
+def _resolve_source(source_data: dict) -> Path | None:
+    """Return the source EML path from a .source.json dict, or None if inaccessible."""
+    for key in ("source_path", "source_path_rel_home"):
+        raw = source_data.get(key)
+        if not raw:
+            continue
+        p = Path(raw) if key == "source_path" else Path.home() / raw
+        if p.exists():
+            return p
+    return None
