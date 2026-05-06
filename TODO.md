@@ -10,9 +10,8 @@
 - [ ] v0.5 quote stripping: detect and collapse full-quote blocks; trigger via --reprocess. Design sketch in CLAUDE.md.
 - [ ] SHA-256 git repo support: auto-detect via `git rev-parse --show-object-format`; fall back to subprocess for source_blob
 - [ ] Attachment MIME type refinement: use python-magic for more accurate typing of synthesized filenames
-- [ ] Update installed plugin copy in ~/src/zkm/plugins/zkm-zkm-eml to v0.6 (was v0.5)
-- [ ] CLAUDE.md: update architecture diagram and "Filename convention" section for v0.4 layout; document EML_LIMIT_RECENT, EML_SLUG_ASCII, and v0.6 sidecar files
-- [ ] Run --reprocess on ~/knowledge to rewrite all existing md files with role-tagged participants + mojibake fixes + attachment sidecars (v0.5→v0.6 schema change)
+- [x] Update installed plugin copy in ~/src/zkm/plugins/zkm-zkm-eml to v0.6 — symlink, already live — 2026-05-06
+- [x] Run --reprocess on ~/knowledge — 30125 files rewritten to v0.6.0 — 2026-05-06
 
 ## Done
 - [x] v0.1 EML to markdown with thread modeling — covered by tests (test_convert.py, test_parse.py, test_threading.py) on 2026-05-05
