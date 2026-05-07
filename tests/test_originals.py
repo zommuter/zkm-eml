@@ -6,12 +6,12 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from zkm_eml.originals import git_blob_sha1
+from zkm.hashing import git_blob_sha1_bytes
 
 
 def test_blob_sha1_matches_git():
     data = b"Hello, world!\n"
-    computed = git_blob_sha1(data)
+    computed = git_blob_sha1_bytes(data)
 
     # Use git as oracle
     with tempfile.NamedTemporaryFile(delete=False) as f:
@@ -30,7 +30,7 @@ def test_blob_sha1_matches_git():
 
 def test_blob_sha1_empty():
     data = b""
-    computed = git_blob_sha1(data)
+    computed = git_blob_sha1_bytes(data)
 
     with tempfile.NamedTemporaryFile(delete=False) as f:
         tmp = f.name
@@ -49,7 +49,7 @@ def test_blob_sha1_eml_file():
     fixtures = Path(__file__).parent / "fixtures"
     for eml in fixtures.glob("*.eml"):
         data = eml.read_bytes()
-        computed = git_blob_sha1(data)
+        computed = git_blob_sha1_bytes(data)
         result = subprocess.run(
             ["git", "hash-object", str(eml)],
             capture_output=True,

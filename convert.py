@@ -13,7 +13,9 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from zkm_eml.frontmatter import write_message_md
 from zkm_eml.naming import date_shard, message_slug, slugify, thread_stub, unique_path
-from zkm_eml.originals import build_inbox_canonical_index, resolve_source_meta, symlink_inbox, write_original
+from zkm.cas import write_object
+from zkm.inbox import build_canonical_index, symlink_with_sidecar
+from zkm_eml.originals import resolve_source_meta, write_original
 from zkm_eml.parse import parse_eml
 from zkm_eml.render import ParentInfo, html_to_markdown, render_body
 from zkm_eml.source import default_exclude_folders, iter_messages
@@ -44,7 +46,7 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
         (store_path / d).mkdir(parents=True, exist_ok=True)
 
     existing_ids, thread_membership, parent_index = build_thread_membership(messages_dir)
-    inbox_canonical = build_inbox_canonical_index(store_path)
+    inbox_canonical = build_canonical_index(store_path, "inbox/mail")
     created: list[Path] = []
     touched_threads: set[str] = set()
 
@@ -84,8 +86,8 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
             YYYY, MM = date_shard(msg.date)
 
             # Resolve git blob from raw bytes (cheap, no subprocess)
-            from zkm_eml.originals import git_blob_sha1
-            source_blob = git_blob_sha1(raw)
+            from zkm.hashing import git_blob_sha1_bytes
+            source_blob = git_blob_sha1_bytes(raw)
 
             home = Path.home()
             try:
@@ -129,13 +131,15 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
 
                 if attachment_inbox and attachment_pairs:
                     msg_md_path = str(dest.relative_to(store_path))
+                    att_YYYY, att_MM = date_shard(msg.date)
+                    link_dir = store_path / "inbox" / "mail" / att_YYYY / att_MM
                     for att, _ in attachment_pairs:
                         try:
-                            symlink_inbox(
-                                store_path, att, msg.date,
-                                msg_md_path=msg_md_path,
-                                msg_sha256=msg.sha256,
-                                plugin_name="eml",
+                            symlink_with_sidecar(
+                                cas_object=write_object(store_path, "mail", att.payload),
+                                link_dir=link_dir,
+                                link_name=att.filename,
+                                producer={"plugin": "eml", "message": msg_md_path, "sha256": msg.sha256},
                                 canonical_index=inbox_canonical,
                             )
                         except Exception as e:

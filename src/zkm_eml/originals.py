@@ -4,24 +4,19 @@ from __future__ import annotations
 
 import email
 import email.policy
-import hashlib
 import json
 import os
 import subprocess
-import tempfile
 from email.message import EmailMessage
 from pathlib import Path
 
+from zkm.atomic import write_atomic
+from zkm.cas import write_object
+from zkm.hashing import git_blob_sha1_bytes
+from zkm.sidecar import merge_producer
+
 from .naming import date_shard
 from .parse import ParsedAttachment, ParsedMessage
-
-
-def git_blob_sha1(data: bytes) -> str:
-    """Compute the git blob hash (SHA-1) for *data* without invoking git."""
-    h = hashlib.sha1()
-    h.update(f"blob {len(data)}\0".encode())
-    h.update(data)
-    return h.hexdigest()
 
 
 def resolve_source_meta(
@@ -34,7 +29,7 @@ def resolve_source_meta(
     Tries to find a .git directory in source_path's ancestry. blob_sha1 is
     always computed locally from the raw bytes.
     """
-    blob = git_blob_sha1(raw_eml)
+    blob = git_blob_sha1_bytes(raw_eml)
     repo = _find_git_root(source_path)
     if repo is None:
         return None, None, blob
@@ -58,7 +53,6 @@ def write_original(
     All paths are relative to store_path.
     """
     originals_dir = store_path / "originals" / "mail"
-    objects_dir = store_path / "mail" / "_objects"
     YYYY, MM = date_shard(msg.date)
     msg_orig_dir = originals_dir / YYYY / MM
     msg_orig_dir.mkdir(parents=True, exist_ok=True)
@@ -71,14 +65,12 @@ def write_original(
         msg_dir.mkdir(exist_ok=True)
         seen_names: set[str] = set()
         for att in msg.attachments:
-            obj_rel = _write_cas_object(objects_dir, att)
+            obj_path = write_object(store_path, "mail", att.payload)
+            obj_rel = f"{att.sha256[:2]}/{att.sha256[2:]}"
             link_name = _unique_filename_set(att.filename, seen_names)
             seen_names.add(link_name)
             link_path = msg_dir / link_name
-            # msg_dir = originals/mail/YYYY/MM/<stem>/
-            # objects_dir = mail/_objects/
-            # relative: ../../../../.. then mail/_objects/<obj_rel>
-            rel_target = Path("../../../../..") / "mail" / "_objects" / obj_rel
+            rel_target = Path(os.path.relpath(obj_path, msg_dir))
             if not link_path.exists():
                 link_path.symlink_to(rel_target)
             symlink_rel = str((msg_dir / link_name).relative_to(store_path))
@@ -88,14 +80,17 @@ def write_original(
             att_sidecar_path = msg_dir / f"{link_name}.json"
             _write_att_sidecar(att_sidecar_path, att, link_name, obj_rel)
 
-            # Per-CAS-object sidecar
-            cas_sidecar_path = objects_dir / f"{att.sha256[:2]}/{att.sha256[2:]}.json"
-            _merge_cas_sidecar(cas_sidecar_path, att, link_name, msg_md_rel, msg.sha256)
+            # Per-CAS-object sidecar (spec v1)
+            merge_producer(
+                obj_path.with_name(obj_path.name + ".json"),
+                sha256=att.sha256,
+                producer={"plugin": "eml", "message": msg_md_rel, "sha256": msg.sha256},
+            )
 
     # --- Write stripped .eml ---
     stripped = _strip_eml(raw_eml, msg.attachments, msg_stem)
     eml_path = msg_orig_dir / f"{msg_stem}.eml"
-    eml_path.write_bytes(stripped)
+    write_atomic(eml_path, stripped)
     eml_rel = str(eml_path.relative_to(store_path))
 
     # --- Write sidecar JSON ---
@@ -115,26 +110,9 @@ def write_original(
         "raw_size": len(raw_eml),
     }
     json_path = msg_orig_dir / f"{msg_stem}.source.json"
-    json_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
+    write_atomic(json_path, json.dumps(sidecar, indent=2))
 
     return eml_rel, attachment_pairs
-
-
-def _write_cas_object(objects_dir: Path, att: ParsedAttachment) -> str:
-    """Write payload to _objects/<aa>/<rest>. Returns relative path aa/<rest>."""
-    sha = att.sha256
-    shard_dir = objects_dir / sha[:2]
-    shard_dir.mkdir(parents=True, exist_ok=True)
-    obj_path = shard_dir / sha[2:]
-    if not obj_path.exists():
-        # Atomic write via temp file in same directory
-        fd, tmp = tempfile.mkstemp(dir=shard_dir)
-        try:
-            os.write(fd, att.payload)
-        finally:
-            os.close(fd)
-        os.replace(tmp, obj_path)
-    return f"{sha[:2]}/{sha[2:]}"
 
 
 def _write_att_sidecar(
@@ -157,51 +135,7 @@ def _write_att_sidecar(
         "sha256": att.sha256,
         "object": f"mail/_objects/{obj_rel}",
     }
-    _atomic_write_json(sidecar_path, data)
-
-
-def _merge_cas_sidecar(
-    sidecar_path: Path,
-    att: ParsedAttachment,
-    link_name: str,
-    msg_md_rel: str,
-    msg_sha256: str,
-) -> None:
-    """Write or update the per-CAS-object sidecar listing all producing messages."""
-    new_producer = {"message": msg_md_rel, "filename": link_name, "sha256": msg_sha256}
-    if sidecar_path.exists():
-        try:
-            data = json.loads(sidecar_path.read_text(encoding="utf-8"))
-            producers = data.get("producers", [])
-            # Dedup by source-content sha256, not rendered path (which can shift between runs)
-            if not any(p.get("sha256") == msg_sha256 for p in producers):
-                producers.append(new_producer)
-                producers.sort(key=lambda p: p.get("message", ""))
-            data["producers"] = producers
-            filenames: list[str] = data.get("filenames", [])
-            if link_name not in filenames:
-                filenames.append(link_name)
-            data["filenames"] = filenames
-            content_types: list[str] = data.get("content_types", [])
-            if att.content_type not in content_types:
-                content_types.append(att.content_type)
-            data["content_types"] = content_types
-        except (OSError, json.JSONDecodeError):
-            data = _new_cas_sidecar(att, link_name, new_producer)
-    else:
-        data = _new_cas_sidecar(att, link_name, new_producer)
-    _atomic_write_json(sidecar_path, data)
-
-
-def _new_cas_sidecar(att: ParsedAttachment, link_name: str, producer: dict) -> dict:
-    return {
-        "schema": 1,
-        "sha256": att.sha256,
-        "size": att.size,
-        "content_types": [att.content_type],
-        "filenames": [link_name],
-        "producers": [producer],
-    }
+    write_atomic(sidecar_path, json.dumps(data, indent=2))
 
 
 def _strip_eml(raw_eml: bytes, attachments: list[ParsedAttachment], msg_slug: str) -> bytes:
@@ -265,130 +199,6 @@ def _git_head(repo: Path) -> str | None:
     except Exception:
         pass
     return None
-
-
-def build_inbox_canonical_index(store_path: Path) -> dict[str, Path]:
-    """Scan existing inbox/mail symlinks to build sha256 -> canonical symlink path index."""
-    index: dict[str, Path] = {}
-    inbox_dir = store_path / "inbox" / "mail"
-    if not inbox_dir.exists():
-        return index
-    for link in inbox_dir.rglob("*"):
-        if not link.is_symlink() or link.name.endswith(".origin.json"):
-            continue
-        try:
-            parts = Path(os.readlink(link)).parts
-            if len(parts) >= 2:
-                sha = parts[-2] + parts[-1]
-                if len(sha) == 64 and sha not in index:
-                    index[sha] = link
-        except Exception:
-            pass
-    return index
-
-
-def symlink_inbox(
-    store_path: Path,
-    att: ParsedAttachment,
-    msg_date,
-    msg_md_path: str,
-    msg_sha256: str,
-    plugin_name: str,
-    canonical_index: dict[str, Path],
-) -> None:
-    """Create or update the canonical inbox/mail symlink and .origin.json sidecar for *att*."""
-    from .naming import date_shard as _date_shard
-
-    sha = att.sha256
-    rel_target = Path("../../../..") / "mail" / "_objects" / sha[:2] / sha[2:]
-    _SIDECAR_SUFFIX = ".origin.json"
-
-    if sha in canonical_index:
-        canonical_link = canonical_index[sha]
-        sidecar_path = canonical_link.parent / (canonical_link.name + _SIDECAR_SUFFIX)
-        _merge_inbox_sidecar(sidecar_path, sha, msg_md_path, msg_sha256, plugin_name)
-        return
-
-    YYYY, MM = _date_shard(msg_date)
-    inbox_dir = store_path / "inbox" / "mail" / YYYY / MM
-    inbox_dir.mkdir(parents=True, exist_ok=True)
-
-    link_name = att.filename
-    link_path = inbox_dir / link_name
-
-    if link_path.is_symlink():
-        existing = Path(os.readlink(link_path))
-        if existing == rel_target:
-            canonical_index[sha] = link_path
-            sidecar_path = link_path.parent / (link_path.name + _SIDECAR_SUFFIX)
-            _merge_inbox_sidecar(sidecar_path, sha, msg_md_path, msg_sha256, plugin_name)
-            return
-        # Name collision with different content — suffix with sha prefix.
-        stem, _, ext = link_name.rpartition(".")
-        if not stem:
-            stem, ext = link_name, ""
-        else:
-            ext = f".{ext}"
-        link_name = f"{stem}_{sha[:8]}{ext}"
-        link_path = inbox_dir / link_name
-        if link_path.is_symlink():
-            canonical_index[sha] = link_path
-            sidecar_path = link_path.parent / (link_path.name + _SIDECAR_SUFFIX)
-            _merge_inbox_sidecar(sidecar_path, sha, msg_md_path, msg_sha256, plugin_name)
-            return
-
-    link_path.symlink_to(rel_target)
-    canonical_index[sha] = link_path
-    sidecar_path = link_path.parent / (link_path.name + _SIDECAR_SUFFIX)
-    _write_inbox_sidecar(sidecar_path, sha, msg_md_path, msg_sha256, plugin_name)
-
-
-def _write_inbox_sidecar(
-    sidecar_path: Path,
-    sha: str,
-    msg_md_path: str,
-    msg_sha256: str,
-    plugin_name: str,
-) -> None:
-    data = {
-        "schema": 1,
-        "sha256": sha,
-        "producers": [{"plugin": plugin_name, "message": msg_md_path, "sha256": msg_sha256}],
-    }
-    _atomic_write_json(sidecar_path, data)
-
-
-def _merge_inbox_sidecar(
-    sidecar_path: Path,
-    sha: str,
-    msg_md_path: str,
-    msg_sha256: str,
-    plugin_name: str,
-) -> None:
-    new_producer = {"plugin": plugin_name, "message": msg_md_path, "sha256": msg_sha256}
-    if sidecar_path.exists():
-        try:
-            data = json.loads(sidecar_path.read_text(encoding="utf-8"))
-            producers = data.get("producers", [])
-            # Dedup by source-content sha256, not rendered path (which can shift between runs)
-            if not any(p.get("sha256") == msg_sha256 for p in producers):
-                producers.append(new_producer)
-                producers.sort(key=lambda p: p.get("message", ""))
-            data["producers"] = producers
-        except (OSError, json.JSONDecodeError):
-            data = {"schema": 1, "sha256": sha, "producers": [new_producer]}
-    else:
-        data = {"schema": 1, "sha256": sha, "producers": [new_producer]}
-    _atomic_write_json(sidecar_path, data)
-
-
-def _atomic_write_json(path: Path, data: dict) -> None:
-    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-    try:
-        os.write(fd, json.dumps(data, indent=2).encode("utf-8"))
-    finally:
-        os.close(fd)
-    os.replace(tmp, path)
 
 
 def backfill_sidecars(store_path: Path) -> tuple[int, int]:
@@ -462,7 +272,11 @@ def backfill_sidecars(store_path: Path) -> tuple[int, int]:
                 att_written += 1
 
             cas_sidecar = objects_dir / f"{sha[:2]}/{sha[2:]}.json"
-            _merge_cas_sidecar(cas_sidecar, att, link_name, msg_md_rel, msg.sha256)
+            merge_producer(
+                cas_sidecar,
+                sha256=sha,
+                producer={"plugin": "eml", "message": msg_md_rel, "sha256": msg.sha256},
+            )
             cas_merged += 1
 
     return att_written, cas_merged
