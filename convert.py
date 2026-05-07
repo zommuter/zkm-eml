@@ -15,10 +15,11 @@ from zkm_eml.frontmatter import write_message_md
 from zkm_eml.naming import date_shard, message_slug, slugify, thread_stub, unique_path
 from zkm.cas import write_object
 from zkm.inbox import build_canonical_index, symlink_with_sidecar
-from zkm_eml.originals import resolve_source_meta, write_original
+from zkm_eml.originals import find_git_root, git_head, resolve_source_meta, write_original
 from zkm_eml.parse import parse_eml
 from zkm_eml.render import ParentInfo, html_to_markdown, render_body
-from zkm_eml.source import default_exclude_folders, iter_messages
+from zkm_eml.source import default_exclude_folders, iter_messages, iter_messages_since
+from zkm_eml.state import get_last_commit, set_last_commit
 from zkm_eml.thread_index import ThreadMember, build_thread_membership, write_thread_index
 from zkm_eml.threading import thread_id_for
 
@@ -53,8 +54,16 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
     # Resolve source git state once per run
     source_repo, source_repo_commit, _ = resolve_source_meta(src, b"")
 
-    # Pre-pass for progress total (cheap directory walk, no file reads)
-    all_paths = list(iter_messages(src, exclude_folders))
+    # Git-commit watermark: enumerate only messages touched since last run.
+    # Falls back to full scan when the source isn't a git repo or watermark is absent/invalid.
+    _src_repo = find_git_root(src)
+    _since = get_last_commit(store_path, _src_repo) if _src_repo else None
+    _fast_path_used = False
+    if _src_repo and _since:
+        all_paths, _fast_path_used = iter_messages_since(src, exclude_folders, _src_repo, _since)
+    else:
+        all_paths = list(iter_messages(src, exclude_folders))
+
     if limit_recent:
         all_paths.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     total = len(all_paths)
@@ -183,6 +192,11 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
         # Write thread indexes from in-memory state — O(T), not O(T*N).
         for tid in touched_threads:
             write_thread_index(store_path, tid, thread_membership.get(tid, []))
+
+    # Advance watermark so the next run only diffs from this commit forward.
+    # Only written on success (exceptions propagate past this point).
+    if _src_repo and source_repo_commit:
+        set_last_commit(store_path, _src_repo, source_repo_commit)
 
     return created
 

@@ -30,10 +30,10 @@ def resolve_source_meta(
     always computed locally from the raw bytes.
     """
     blob = git_blob_sha1_bytes(raw_eml)
-    repo = _find_git_root(source_path)
+    repo = find_git_root(source_path)
     if repo is None:
         return None, None, blob
-    commit = _git_head(repo)
+    commit = git_head(repo)
     return str(repo), commit, blob
 
 
@@ -177,7 +177,7 @@ def _unique_filename_set(name: str, seen: set[str]) -> str:
         i += 1
 
 
-def _find_git_root(path: Path) -> Path | None:
+def find_git_root(path: Path) -> Path | None:
     current = path if path.is_dir() else path.parent
     for parent in [current, *current.parents]:
         if (parent / ".git").exists():
@@ -185,7 +185,7 @@ def _find_git_root(path: Path) -> Path | None:
     return None
 
 
-def _git_head(repo: Path) -> str | None:
+def git_head(repo: Path) -> str | None:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],

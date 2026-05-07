@@ -339,3 +339,95 @@ def test_round_trip_originals_body_unchanged(store: Path, tmp_path: Path):
                     f"Original {orig_eml} body doesn't contain source body from {name}"
                 )
                 break
+
+
+# ---------------------------------------------------------------------------
+# Git-commit watermark integration
+# ---------------------------------------------------------------------------
+
+
+import subprocess as _subprocess
+
+from zkm_eml.state import get_last_commit, read_state
+
+
+def _git(args, cwd):
+    return _subprocess.run(
+        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def _make_git_src(tmp_path, name="src"):
+    src = tmp_path / name
+    src.mkdir()
+    _git(["init"], src)
+    _git(["config", "user.email", "t@t.com"], src)
+    _git(["config", "user.name", "T"], src)
+    return src
+
+
+def _commit_all(repo, msg="commit"):
+    _git(["add", "-A"], repo)
+    _git(["commit", "--allow-empty", "-m", msg], repo)
+    return _git(["rev-parse", "HEAD"], repo)
+
+
+def test_watermark_written_after_convert(tmp_path: Path) -> None:
+    """A successful convert records the source HEAD as the watermark."""
+    src = _make_git_src(tmp_path)
+    eml = FIXTURES / "simple.eml"
+    shutil.copy(eml, src / "simple.eml")
+    sha = _commit_all(src, "add eml")
+
+    store = tmp_path / "store"
+    store.mkdir()
+    (store / ".git").mkdir()
+    for d in ["mail/messages", "mail/threads", "originals/mail"]:
+        (store / d).mkdir(parents=True)
+
+    config = {"EML_SOURCE_DIR": str(src), "EML_KEEP_ORIGINALS": "false"}
+    convert(store, config)
+
+    assert get_last_commit(store, src) == sha
+
+
+def test_watermark_second_run_skips_existing(tmp_path: Path) -> None:
+    """Second convert with no new source commits processes nothing (fast path)."""
+    src = _make_git_src(tmp_path)
+    shutil.copy(FIXTURES / "simple.eml", src / "simple.eml")
+    _commit_all(src, "add eml")
+
+    store = tmp_path / "store"
+    store.mkdir()
+    (store / ".git").mkdir()
+    for d in ["mail/messages", "mail/threads", "originals/mail"]:
+        (store / d).mkdir(parents=True)
+
+    config = {"EML_SOURCE_DIR": str(src), "EML_KEEP_ORIGINALS": "false"}
+    created1 = convert(store, config)
+    assert len(created1) >= 1
+
+    created2 = convert(store, config)
+    assert created2 == []
+
+
+def test_watermark_keys_by_repo_not_subdir(tmp_path: Path) -> None:
+    """Two different source subdirs in the same git repo share a watermark key."""
+    repo = _make_git_src(tmp_path, "repo")
+    (repo / "inbox1").mkdir()
+    (repo / "inbox2").mkdir()
+    shutil.copy(FIXTURES / "simple.eml", repo / "inbox1" / "msg.eml")
+    _commit_all(repo, "init")
+
+    store = tmp_path / "store"
+    store.mkdir()
+    (store / ".git").mkdir()
+    for d in ["mail/messages", "mail/threads", "originals/mail"]:
+        (store / d).mkdir(parents=True)
+
+    config1 = {"EML_SOURCE_DIR": str(repo / "inbox1"), "EML_KEEP_ORIGINALS": "false"}
+    convert(store, config1)
+    state = read_state(store)
+    # Key is the repo root, not the subdir
+    assert str(repo) in state
+    assert str(repo / "inbox1") not in state
