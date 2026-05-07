@@ -407,3 +407,75 @@ def test_cas_object_sidecar_idempotent(store: Path):
     assert len(json_sidecars) == 1
     data = json.loads(json_sidecars[0].read_text(encoding="utf-8"))
     assert len(data["producers"]) == 1  # not doubled
+
+
+def test_inbox_sidecar_stable_under_message_path_drift(store: Path):
+    """Changing the rendered .md path between calls must not duplicate producers.
+
+    Regression test for the dedup-key bug: previously the inbox sidecar deduped
+    on `message` (rendered path), which can shift between runs. The fix uses
+    `sha256` (source-content hash) as the stable key.
+    """
+    from zkm_eml.originals import _merge_inbox_sidecar
+
+    sidecar = store / "test_sidecar.origin.json"
+    att_sha = "a" * 64        # arbitrary attachment sha256
+    msg_sha = "b" * 64        # source message sha256 (stable across path changes)
+    plugin = "zkm-eml"
+
+    # First call: write initial sidecar with path v1
+    _merge_inbox_sidecar(sidecar, att_sha, "mail/messages/2026/04/original.md", msg_sha, plugin)
+    data = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert len(data["producers"]) == 1
+
+    # Second call: same msg_sha, but rendered path changed (slug drift)
+    _merge_inbox_sidecar(sidecar, att_sha, "mail/messages/2026/04/original_1.md", msg_sha, plugin)
+    data = json.loads(sidecar.read_text(encoding="utf-8"))
+    # Must still be 1 — the source sha256 dedup prevents the duplicate
+    assert len(data["producers"]) == 1, (
+        "Sidecar producer list grew despite same source sha256 — "
+        "dedup key must be sha256, not message path"
+    )
+
+
+def test_cas_sidecar_dedup_by_sha256(store: Path):
+    """CAS-object sidecar deduplication uses source sha256, not rendered message path.
+
+    Also asserts that each producer entry contains a sha256 field.
+    """
+    from zkm_eml.originals import _merge_cas_sidecar
+    from zkm_eml.parse import ParsedAttachment
+
+    # Minimal attachment stub
+    payload = b"fake-pdf-content"
+    att = ParsedAttachment(
+        filename="doc.pdf",
+        filename_raw="doc.pdf",
+        content_type="application/pdf",
+        content_id=None,
+        is_inline=False,
+        referenced_in_html=False,
+        size=len(payload),
+        sha256=hashlib.sha256(payload).hexdigest(),
+        payload=payload,
+        part_index=0,
+    )
+    sidecar = store / "cas_sidecar.json"
+    msg_sha_v1 = "c" * 64   # stable source hash
+    msg_sha_v2 = "d" * 64   # different source hash → genuinely new producer
+
+    # First producer
+    _merge_cas_sidecar(sidecar, att, "doc.pdf", "mail/messages/2026/04/msg_v1.md", msg_sha_v1)
+    data = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert len(data["producers"]) == 1
+    assert data["producers"][0]["sha256"] == msg_sha_v1, "Producer must carry sha256 field"
+
+    # Same source sha → dedup, no growth even if message path changes
+    _merge_cas_sidecar(sidecar, att, "doc.pdf", "mail/messages/2026/04/msg_v1_drift.md", msg_sha_v1)
+    data = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert len(data["producers"]) == 1, "Same sha256 must not duplicate the producer"
+
+    # Different source sha → genuine second producer
+    _merge_cas_sidecar(sidecar, att, "doc.pdf", "mail/messages/2026/04/msg_v2.md", msg_sha_v2)
+    data = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert len(data["producers"]) == 2, "Different sha256 must add a new producer"

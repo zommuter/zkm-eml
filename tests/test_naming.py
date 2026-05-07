@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import sys
 from datetime import datetime, timezone
 
 from zkm_eml.naming import date_shard, message_slug, slugify, thread_stub

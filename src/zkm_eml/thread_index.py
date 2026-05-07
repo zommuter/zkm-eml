@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import frontmatter
+import yaml
 
 from .naming import slugify, thread_stub
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -38,7 +42,8 @@ def build_thread_membership(
     for md in messages_dir.rglob("*.md"):
         try:
             post = frontmatter.load(md)
-        except Exception:
+        except (OSError, yaml.YAMLError) as exc:
+            logger.warning("thread_index: cannot read %s: %s", md, exc)
             continue
         mid = post.metadata.get("message_id", "")
         if mid:

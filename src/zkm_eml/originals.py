@@ -90,7 +90,7 @@ def write_original(
 
             # Per-CAS-object sidecar
             cas_sidecar_path = objects_dir / f"{att.sha256[:2]}/{att.sha256[2:]}.json"
-            _merge_cas_sidecar(cas_sidecar_path, att, link_name, msg_md_rel)
+            _merge_cas_sidecar(cas_sidecar_path, att, link_name, msg_md_rel, msg.sha256)
 
     # --- Write stripped .eml ---
     stripped = _strip_eml(raw_eml, msg.attachments, msg_stem)
@@ -165,14 +165,16 @@ def _merge_cas_sidecar(
     att: ParsedAttachment,
     link_name: str,
     msg_md_rel: str,
+    msg_sha256: str,
 ) -> None:
     """Write or update the per-CAS-object sidecar listing all producing messages."""
-    new_producer = {"message": msg_md_rel, "filename": link_name}
+    new_producer = {"message": msg_md_rel, "filename": link_name, "sha256": msg_sha256}
     if sidecar_path.exists():
         try:
             data = json.loads(sidecar_path.read_text(encoding="utf-8"))
             producers = data.get("producers", [])
-            if not any(p.get("message") == msg_md_rel for p in producers):
+            # Dedup by source-content sha256, not rendered path (which can shift between runs)
+            if not any(p.get("sha256") == msg_sha256 for p in producers):
                 producers.append(new_producer)
                 producers.sort(key=lambda p: p.get("message", ""))
             data["producers"] = producers
@@ -184,7 +186,7 @@ def _merge_cas_sidecar(
             if att.content_type not in content_types:
                 content_types.append(att.content_type)
             data["content_types"] = content_types
-        except Exception:
+        except (OSError, json.JSONDecodeError):
             data = _new_cas_sidecar(att, link_name, new_producer)
     else:
         data = _new_cas_sidecar(att, link_name, new_producer)
@@ -368,11 +370,12 @@ def _merge_inbox_sidecar(
         try:
             data = json.loads(sidecar_path.read_text(encoding="utf-8"))
             producers = data.get("producers", [])
-            if not any(p.get("message") == msg_md_path for p in producers):
+            # Dedup by source-content sha256, not rendered path (which can shift between runs)
+            if not any(p.get("sha256") == msg_sha256 for p in producers):
                 producers.append(new_producer)
                 producers.sort(key=lambda p: p.get("message", ""))
             data["producers"] = producers
-        except Exception:
+        except (OSError, json.JSONDecodeError):
             data = {"schema": 1, "sha256": sha, "producers": [new_producer]}
     else:
         data = {"schema": 1, "sha256": sha, "producers": [new_producer]}
@@ -459,7 +462,7 @@ def backfill_sidecars(store_path: Path) -> tuple[int, int]:
                 att_written += 1
 
             cas_sidecar = objects_dir / f"{sha[:2]}/{sha[2:]}.json"
-            _merge_cas_sidecar(cas_sidecar, att, link_name, msg_md_rel)
+            _merge_cas_sidecar(cas_sidecar, att, link_name, msg_md_rel, msg.sha256)
             cas_merged += 1
 
     return att_written, cas_merged
