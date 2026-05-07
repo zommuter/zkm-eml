@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import frontmatter
 import pytest
 
 from convert import convert, reprocess
+from zkm_eml.parse import parse_eml
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -34,7 +36,7 @@ def test_convert_basic(store: Path):
         assert "thread_id" in post.metadata
         assert "thread" in post.metadata
         assert "processor" in post.metadata
-        assert post.metadata["processor_version"] == "0.6.0"
+        assert post.metadata["processor_version"] == "0.7.0"
 
 
 def test_convert_idempotent(store: Path):
@@ -191,3 +193,149 @@ def test_limit_recent(store: Path, tmp_path: Path):
     config = {"EML_SOURCE_DIR": str(src), "EML_KEEP_ORIGINALS": "false", "EML_LIMIT_RECENT": "2"}
     created = convert(store, config)
     assert len(created) == 2
+
+
+# ---------------------------------------------------------------------------
+# Quote stripping integration tests
+# ---------------------------------------------------------------------------
+
+def _make_chain_store(store: Path, tmp_path: Path) -> tuple[Path, list[Path]]:
+    """Create a source dir with just the chain fixtures and convert+reprocess."""
+    chain_src = tmp_path / "chain_src"
+    chain_src.mkdir()
+    for name in ["chain_a.eml", "chain_b.eml", "chain_c.eml", "chain_d.eml"]:
+        shutil.copy(FIXTURES / name, chain_src / name)
+    config = {"EML_SOURCE_DIR": str(chain_src), "EML_KEEP_ORIGINALS": "true"}
+    created = convert(store, config)
+    assert len(created) == 4
+    # Reprocess so all parent lookups can resolve across the full set
+    reprocess(store, config, created)
+    return chain_src, created
+
+
+def _body_by_subject(store: Path, subject: str) -> str:
+    matches = []
+    for md in (store / "mail" / "messages").rglob("*.md"):
+        post = frontmatter.load(md)
+        if post.metadata.get("subject") == subject:
+            matches.append(post.content)
+    if not matches:
+        raise AssertionError(f"No message found with subject: {subject!r}")
+    if len(matches) > 1:
+        raise AssertionError(f"Ambiguous: {len(matches)} messages with subject {subject!r}")
+    return matches[0]
+
+
+def _body_by_message_id(store: Path, message_id: str) -> str:
+    clean = message_id.strip("<>")
+    for md in (store / "mail" / "messages").rglob("*.md"):
+        post = frontmatter.load(md)
+        raw = post.metadata.get("message_id", "")
+        if raw.strip("<>") == clean:
+            return post.content
+    raise AssertionError(f"No message found with message_id: {message_id!r}")
+
+
+def test_quote_strip_collapses_simple_reply(store: Path, tmp_path: Path):
+    """reply.eml (reply-001) should have its quoted section collapsed."""
+    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "true"}
+    created = convert(store, config)
+    reprocess(store, config, created)
+
+    body = _body_by_message_id(store, "reply-001@example.com")
+    assert "Quoted from:" in body
+    # Raw quoted text should be gone
+    assert "This is a simple test email." not in body
+    # Author's own text should remain
+    assert "Thanks for the message!" in body
+
+
+def test_quote_strip_chain(store: Path, tmp_path: Path):
+    """Each message in the chain should have its tail quote collapsed."""
+    _make_chain_store(store, tmp_path)
+
+    body_b = _body_by_subject(store, "Re: Welcome to chain test")
+    assert "Quoted from:" in body_b
+    assert "Hi everyone," not in body_b
+    assert "Thanks Alice, good to start." in body_b
+
+    body_c = _body_by_subject(store, "Re: Re: Welcome to chain test")
+    assert "Quoted from:" in body_c
+    assert "Thanks Alice, good to start." not in body_c
+
+    body_d = _body_by_subject(store, "Re: Re: Re: Welcome to chain test")
+    assert "Quoted from:" in body_d
+    assert "Agreed, let's keep going." not in body_d
+
+
+def test_quote_strip_disabled(store: Path, tmp_path: Path):
+    """EML_QUOTE_STRIP=false preserves raw quoted text."""
+    chain_src = tmp_path / "chain_src"
+    chain_src.mkdir()
+    for name in ["chain_a.eml", "chain_b.eml"]:
+        shutil.copy(FIXTURES / name, chain_src / name)
+    config = {
+        "EML_SOURCE_DIR": str(chain_src),
+        "EML_KEEP_ORIGINALS": "true",
+        "EML_QUOTE_STRIP": "false",
+    }
+    created = convert(store, config)
+    reprocess(store, config, created)
+
+    body_b = _body_by_subject(store, "Re: Welcome to chain test")
+    assert "Quoted from:" not in body_b
+    assert "Hi everyone," in body_b
+
+
+def test_quote_strip_idempotent(store: Path, tmp_path: Path):
+    """Running reprocess twice produces no further changes."""
+    chain_src = tmp_path / "chain_src"
+    chain_src.mkdir()
+    for name in ["chain_a.eml", "chain_b.eml"]:
+        shutil.copy(FIXTURES / name, chain_src / name)
+    config = {"EML_SOURCE_DIR": str(chain_src), "EML_KEEP_ORIGINALS": "true"}
+    created = convert(store, config)
+    reprocess(store, config, created)
+
+    # Capture bodies after first reprocess
+    bodies_1 = {
+        md.name: frontmatter.load(md).content
+        for md in (store / "mail" / "messages").rglob("*.md")
+    }
+
+    # Second reprocess
+    reprocess(store, config, created)
+    bodies_2 = {
+        md.name: frontmatter.load(md).content
+        for md in (store / "mail" / "messages").rglob("*.md")
+    }
+
+    assert bodies_1 == bodies_2
+
+
+def test_round_trip_originals_body_unchanged(store: Path, tmp_path: Path):
+    """parse_eml on the stored original must yield the same plain_body as the source EML."""
+    chain_src = tmp_path / "chain_src"
+    chain_src.mkdir()
+    for name in ["chain_a.eml", "chain_b.eml", "chain_c.eml"]:
+        src_eml = FIXTURES / name
+        shutil.copy(src_eml, chain_src / name)
+
+    source_bodies = {
+        name: parse_eml(chain_src / name).plain_body
+        for name in ["chain_a.eml", "chain_b.eml", "chain_c.eml"]
+    }
+
+    config = {"EML_SOURCE_DIR": str(chain_src), "EML_KEEP_ORIGINALS": "true"}
+    convert(store, config)
+
+    originals_dir = store / "originals" / "mail"
+    for orig_eml in originals_dir.rglob("*.eml"):
+        parsed = parse_eml(orig_eml)
+        for name, source_body in source_bodies.items():
+            if source_body and parsed.plain_body and source_body in parsed.plain_body:
+                # The stored original contains at least the source body text
+                assert source_body in parsed.plain_body, (
+                    f"Original {orig_eml} body doesn't contain source body from {name}"
+                )
+                break

@@ -10,7 +10,7 @@ import frontmatter
 from .parse import ParsedAttachment, ParsedMessage
 
 PLUGIN_NAME = "zkm-eml"
-PLUGIN_VERSION = "0.6.0"
+PLUGIN_VERSION = "0.7.0"
 
 
 def write_message_md(

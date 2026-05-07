@@ -7,7 +7,7 @@
 - [ ] Drafts: optional "follow draft updates" mode (Message-ID/content changes on each save) — YAGNI for now
 - [ ] `_objects` GC: walk `mail/_objects/<aa>/<rest>.json` producer lists, prune CAS objects and sidecars whose producers all reference deleted messages
 - [x] Backfill per-attachment and per-CAS sidecars for existing _objects: backfill_sidecars() + backfill.py; ran on ~/knowledge: 11032 sidecars written, 11032 CAS entries merged — 2026-05-06
-- [ ] v0.5 quote stripping: detect and collapse full-quote blocks; trigger via --reprocess. Design sketch in CLAUDE.md.
+- [x] v0.7 quote stripping: full tail-quote collapse with similarity matching, English/German attribution detection, nested chain support, round-trip guarantee via originals; trigger via --reprocess — 2026-05-07
 - [ ] SHA-256 git repo support: auto-detect via `git rev-parse --show-object-format`; fall back to subprocess for source_blob
 - [ ] Attachment MIME type refinement: use python-magic for more accurate typing of synthesized filenames
 - [x] Update installed plugin copy in ~/src/zkm/plugins/zkm-zkm-eml to v0.6 — symlink, already live — 2026-05-06

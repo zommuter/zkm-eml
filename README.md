@@ -8,7 +8,8 @@
 - Handles both Maildir format (files in `cur/`/`new/` without `.eml` extension) and flat `.eml` dumps
 - Writes one `mail/messages/<date>_<slug>.md` per message with frontmatter per the [zkm messaging-spec](https://github.com/Zommuter/zkm/blob/main/docs/messaging-spec.md)
 - Groups messages into threads via RFC 5322 `References` chains — one `mail/threads/<thread_id>.md` per thread, regenerated on every run
-- Stores stripped originals in `originals/mail/` (attachment payloads detached, stubs added) — raw bytes reproducible via `git cat-file blob <source_blob>`
+- Collapses full tail-quote blocks into a single `> *[Quoted from: …]*` link — English and German attribution lines ("On … wrote:" / "Am … schrieb:") are detected and removed; interleaved replies and low-similarity quotes are left untouched (`EML_QUOTE_STRIP`)
+- Stores stripped originals in `originals/mail/` (attachment payloads detached, stubs added) — raw bytes reproducible via `git cat-file blob <source_blob>`; body text is always preserved verbatim in the original for round-trip fidelity
 - Attachments go into a content-addressed store at `originals/mail/_objects/` (sha256-named, deduplicated) and are symlinked from `inbox/` for other zkm plugins to pick up
 - Deduplicates by `Message-ID` — re-running is safe and idempotent
 - Skips `Trash`, `Junk`, `Spam`, `Drafts`, and similar noise folders by default
@@ -70,6 +71,9 @@ EML_OWNER_ADDRESSES=you@example.com,you@work.example.com
 # Optional — set false to skip attachment extraction / inbox symlinks
 # EML_KEEP_ORIGINALS=true
 # EML_ATTACHMENT_INBOX=true
+
+# Optional — set false to keep raw quoted text (no tail-quote collapsing)
+# EML_QUOTE_STRIP=true
 ```
 
 ### 4. Convert
@@ -118,10 +122,10 @@ cat "$(jq -r .source_path originals/mail/2026-04-13_foo.source.json)"
 
 ## Re-processing
 
-When the plugin algorithm improves (e.g. quote stripping is added in v0.3), re-derive all existing markdown from stored originals:
+After upgrading the plugin (e.g. to v0.7 which adds quote stripping), re-derive all existing markdown from stored originals:
 
 ```bash
-zkm convert zkm-eml --reprocess-all
+zkm convert zkm-eml --reprocess
 ```
 
 ## Development

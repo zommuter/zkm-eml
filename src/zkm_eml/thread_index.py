@@ -21,17 +21,19 @@ class ThreadMember:
 
 def build_thread_membership(
     messages_dir: Path,
-) -> tuple[set[str], dict[str, list[ThreadMember]]]:
-    """Walk messages_dir once and return (message_ids, thread_membership).
+) -> tuple[set[str], dict[str, list[ThreadMember]], dict[str, tuple[Path, str | None]]]:
+    """Walk messages_dir once and return (message_ids, thread_membership, parent_index).
 
     message_ids  — set of all known message_id values (for deduplication).
     membership   — {thread_id: [ThreadMember, ...]} for index writes.
+    parent_index — {message_id: (md_path, original_rel)} for quote-strip parent lookup.
     """
     if not messages_dir.exists():
-        return set(), {}
+        return set(), {}, {}
 
     message_ids: set[str] = set()
     membership: dict[str, list[ThreadMember]] = {}
+    parent_index: dict[str, tuple[Path, str | None]] = {}
 
     for md in messages_dir.rglob("*.md"):
         try:
@@ -40,7 +42,10 @@ def build_thread_membership(
             continue
         mid = post.metadata.get("message_id", "")
         if mid:
-            message_ids.add(mid.strip("<>").strip())
+            mid_clean = mid.strip("<>").strip()
+            message_ids.add(mid_clean)
+            original_rel: str | None = post.metadata.get("original") or None
+            parent_index[mid_clean] = (md, original_rel)
         tid = post.metadata.get("thread_id", "")
         if tid:
             member = ThreadMember(
@@ -51,7 +56,7 @@ def build_thread_membership(
             )
             membership.setdefault(tid, []).append(member)
 
-    return message_ids, membership
+    return message_ids, membership, parent_index
 
 
 def thread_index_path(store_path: Path, thread_id: str, members: list[ThreadMember]) -> Path:
@@ -88,7 +93,7 @@ def regenerate_thread_index(store_path: Path, thread_id: str) -> Path:
     Prefer build_thread_membership() + write_thread_index() in batch runs.
     """
     messages_dir = store_path / "mail" / "messages"
-    _, membership = build_thread_membership(messages_dir)
+    _, membership, _ = build_thread_membership(messages_dir)
     members = membership.get(thread_id, [])
     if not members:
         raise ValueError(f"No messages found for thread_id {thread_id}")

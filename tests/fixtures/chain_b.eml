@@ -1,0 +1,19 @@
+From: Bob <bob@example.com>
+To: Alice <alice@example.com>
+Subject: Re: Welcome to chain test
+Date: Mon, 20 Apr 2026 11:00:00 +0000
+Message-ID: <chain-b@example.com>
+In-Reply-To: <chain-a@example.com>
+References: <chain-a@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Thanks Alice, good to start.
+
+Bob
+
+> Hi everyone,
+>
+> Welcome to the chain test.
+>
+> Alice

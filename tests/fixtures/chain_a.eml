@@ -1,0 +1,13 @@
+From: Alice <alice@example.com>
+To: Bob <bob@example.com>
+Subject: Welcome to chain test
+Date: Mon, 20 Apr 2026 10:00:00 +0000
+Message-ID: <chain-a@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Hi everyone,
+
+Welcome to the chain test.
+
+Alice

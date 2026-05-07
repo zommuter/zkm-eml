@@ -1,5 +1,5 @@
 name: zkm-eml
-version: 0.6.0
+version: 0.7.0
 description: Convert Maildir or .eml files to markdown with thread modeling and attachment extraction.
 
 creates_dirs:
@@ -29,3 +29,7 @@ config:
     required: false
     default: "true"
     description: Symlink detached attachments into inbox/ so other plugins (zkm-pdf, zkm-photo, recursive zkm-eml) can pick them up.
+  EML_QUOTE_STRIP:
+    required: false
+    default: "true"
+    description: Collapse full tail-quote blocks into a single link line referencing the parent message. Requires EML_KEEP_ORIGINALS=true for accurate matching. Set false to preserve raw quoted text.

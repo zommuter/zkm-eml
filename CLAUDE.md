@@ -24,7 +24,8 @@ EML_SOURCE_DIR/          # mbsync Maildir tree or flat .eml dump (default ~/mail
     parse.py             # email.message_from_bytes → ParsedMessage + ParsedAttachment
          │
          ├── threading.py     # References chain → thread_id, thread tree
-         ├── render.py        # body selection: plaintext > HTML→markdownify
+         ├── render.py        # body selection: plaintext > HTML→markdownify; parent lookup
+         ├── quote_strip.py   # tail-quote detection, similarity, collapse
          ├── frontmatter.py   # write frontmatter per messaging-spec.md
          ├── thread_index.py  # regenerate mail/threads/<thread_id>.md
          ├── naming.py        # slugify, unique_path, sanitize_filename (shared)
@@ -67,15 +68,14 @@ EML_SOURCE_DIR/          # mbsync Maildir tree or flat .eml dump (default ~/mail
 - Entry: `thread_id_for(message_id: str, references: list[str]) -> str`
 - Thread ID = first 16 hex chars of `sha256(root_message_id.encode())`
 - Root = oldest `Message-ID` in References chain, or the message's own ID if References is empty
-- Also: `build_thread_tree(messages: list[ParsedMessage]) -> dict` for thread index rendering
 - Designed so thread_id is stable: same input always produces same ID
 
 ### `render.py`
-- Entry: `render_body(msg: ParsedMessage) -> str`
-- Prefer `plain_body` if non-empty (after whitespace normalization)
-- Fall back to `markdownify(html_body)` if plain is absent
-- **v0.1**: no quote stripping — body preserved as-is
-- **v0.2 design** (deferred — see below): detect and collapse full-quote blocks
+- Entry: `render_body(msg: ParsedMessage, parent_lookup=None, dest=None) -> str`
+- Prefer `plain_body` if non-empty; fall back to `markdownify(html_body)` if plain is absent
+- When `parent_lookup` and `dest` are provided, calls `quote_strip.strip_full_quote` on the selected body
+- `parent_lookup(message_id) -> ParentInfo | None` — caller-supplied closure; built in `convert.py`
+- `html_to_markdown(html) -> str` — public re-export of the markdownify wrapper (used by parent lookup for HTML-only parents)
 
 ### `originals.py`
 - Entry: `write_original(store_path, msg, raw_eml, msg_slug, source_repo, source_repo_commit, source_blob) -> (eml_rel, [(att, symlink_rel), ...])`
@@ -93,10 +93,12 @@ EML_SOURCE_DIR/          # mbsync Maildir tree or flat .eml dump (default ~/mail
 - New fields: `attachments` (list with filename/sha256/path/object/content_type/size/inline/cid_referenced), `source_path`, `source_repo_commit`, `source_blob`
 
 ### `thread_index.py`
-- Entry: `regenerate_thread_index(store_path: Path, thread_id: str) -> Path`
-- Walks `mail/messages/` to collect all messages for a given thread_id
-- Sorts chronologically by `date` frontmatter
-- Writes `mail/threads/<thread_id>.md` with a table of message links
+- Entry: `build_thread_membership(messages_dir) -> (message_ids, thread_membership, parent_index)`
+  - `message_ids` — `set[str]` of all known message_ids for deduplication
+  - `thread_membership` — `{thread_id: [ThreadMember, ...]}` for index writes
+  - `parent_index` — `{message_id: (md_path, original_rel)}` for quote-strip parent lookup
+- `write_thread_index(store_path, thread_id, members)` — writes `mail/threads/YYYY/MM/…md` from in-memory list
+- `regenerate_thread_index(store_path, thread_id)` — back-compat wrapper: scans disk then writes
 
 ## Deduplication
 
@@ -124,6 +126,22 @@ Per-message symlinks (`originals/mail/<slug>/<filename>`) point at CAS objects w
 
 Decoration vs inline photos: currently treated uniformly — all attachments go through the same path. See TODO.md for the open classification question.
 
+### `quote_strip.py`
+- Entry: `strip_full_quote(body, parent_plain, parent_md_link, threshold=0.90) -> str`
+- `find_tail_quote(lines) -> QuoteBlock | None` — detects a contiguous `>`-prefixed block at the tail of the message; returns None for interleaved replies (any `>` line in the author's own text section)
+- `normalize_for_match(text) -> str` — lowercase + collapse horizontal whitespace + collapse blank lines (no `>` stripping — that's done by `find_tail_quote`)
+- `similarity(a, b) -> float` — `difflib.SequenceMatcher.ratio()` on pre-normalized strings
+- Attribution detection: single-line `"On … wrote:"` (English) or `"Am … schrieb …:"` (German Thunderbird) immediately before the quote block; removed along with the block when similarity matches
+- Nested chains: strips exactly ONE `> ` level per line; inner `> > …` nesting is preserved so the stripped text matches the parent's own plain_body (which already contains those nested quotes)
+- Idempotency guard: if the block is already the `*[Quoted from: …]*` marker, `find_tail_quote` returns None
+- Stdlib only — `difflib.SequenceMatcher`, no new deps
+
+Quote stripping is controlled via `EML_QUOTE_STRIP=true` (default). When false, `render_body` receives no `parent_lookup` and bodies are passed through as-is (v0.6 behaviour). Requires `EML_KEEP_ORIGINALS=true` for accurate matching; falls back to reading the rendered .md body with a one-time warning if originals are absent.
+
+**Round-trip guarantee**: `originals/mail/<slug>.eml` always preserves the full body verbatim (only attachment payloads are detached). The rendered .md body is the only lossy surface. Re-running with `EML_QUOTE_STRIP=false` or `--reprocess` after any algorithm change recovers the original rendering from the stored .eml.
+
+**v0.8 design** (deferred): partial/interleaved quote collapse — segment by `>`-prefix runs, match each segment against ancestors, replace with anchored links.
+
 ## Direction detection
 
 `EML_OWNER_ADDRESSES` (comma-separated, from `.env`) is matched against the `From:` address:
@@ -131,25 +149,21 @@ Decoration vs inline photos: currently treated uniformly — all attachments go 
 - Otherwise → `incoming`
 - If `EML_OWNER_ADDRESSES` is empty → `unknown`
 
-## v0.2 quote-stripping (deferred)
-
-**Design sketch** (kept here so it doesn't get re-derived):
-
-1. **Full-quote detection**: after stripping `> ` prefixes from each line run, compare normalized text against the `plain_body` of the parent in the thread tree.
-   - If similarity ≥ 90% (e.g. via `difflib.SequenceMatcher`) → replace quoted block with `> *[Quoted from: [parent subject](../messages/parent.md)]*`
-2. **Partial-quote detection** (v0.3): segment by `>`-prefix runs. For each run, find the best match in any ancestor. Replace with an anchored link `[…quoted from parent](…#anchor)`.
-3. **HTML↔plaintext canonicalization**: normalize both to comparable plaintext before matching — handles the common case where the HTML body quotes the plain body of the parent (or vice versa).
-
-Trigger via `zkm convert zkm-eml --reprocess` once v0.2 is released. The `original` frontmatter field (pointing to `originals/mail/`) enables this without re-fetching.
-
 ## Tests
 
 All test fixtures are **synthetic** — no real email. Never commit real `.eml` files.
 
 - `tests/fixtures/*.eml` — hand-crafted minimal EML files for edge cases
+- `tests/fixtures/chain_{a,b,c,d}.eml` — four-message nested-quote chain for v0.7 tests
+- `tests/fixtures/reply_attribution.eml` — English "On … wrote:" attribution pattern
+- `tests/fixtures/reply_attribution_de.eml` — German "Am … schrieb …:" attribution pattern
+- `tests/fixtures/reply_inline.eml` — interleaved quoting (must NOT be collapsed)
+- `tests/fixtures/reply_low_similarity.eml` — quote doesn't match parent (< 0.90)
+- `tests/fixtures/reply_already_stripped.eml` — idempotency fixture
 - `test_parse.py` — multipart, missing Message-ID, broken encoding, attachments
 - `test_threading.py` — thread_id stability, broken References chain, orphaned reply
-- `test_convert.py` — end-to-end against a temp store; idempotency; thread index regeneration
+- `test_quote_strip.py` — unit tests for quote_strip.py pure functions
+- `test_convert.py` — end-to-end against a temp store; idempotency; thread index regeneration; quote-strip integration
 
 ## Development setup
 

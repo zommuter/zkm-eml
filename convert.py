@@ -15,7 +15,7 @@ from zkm_eml.frontmatter import write_message_md
 from zkm_eml.naming import date_shard, message_slug, slugify, thread_stub, unique_path
 from zkm_eml.originals import build_inbox_canonical_index, resolve_source_meta, symlink_inbox, write_original
 from zkm_eml.parse import parse_eml
-from zkm_eml.render import render_body
+from zkm_eml.render import ParentInfo, html_to_markdown, render_body
 from zkm_eml.source import default_exclude_folders, iter_messages
 from zkm_eml.thread_index import ThreadMember, build_thread_membership, write_thread_index
 from zkm_eml.threading import thread_id_for
@@ -35,6 +35,7 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
 
     keep_originals = config.get("EML_KEEP_ORIGINALS", "true").lower() not in ("false", "0", "no")
     attachment_inbox = config.get("EML_ATTACHMENT_INBOX", "true").lower() not in ("false", "0", "no")
+    quote_strip = config.get("EML_QUOTE_STRIP", "true").lower() not in ("false", "0", "no")
 
     limit_recent = int(config.get("EML_LIMIT_RECENT", "0") or "0")
 
@@ -42,7 +43,7 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
     for d in ["mail/messages", "mail/threads", "mail/_objects", "originals/mail", "inbox"]:
         (store_path / d).mkdir(parents=True, exist_ok=True)
 
-    existing_ids, thread_membership = build_thread_membership(messages_dir)
+    existing_ids, thread_membership, parent_index = build_thread_membership(messages_dir)
     inbox_canonical = build_inbox_canonical_index(store_path)
     created: list[Path] = []
     touched_threads: set[str] = set()
@@ -55,6 +56,8 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
     if limit_recent:
         all_paths.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     total = len(all_paths)
+
+    lookup = _make_parent_lookup(store_path, parent_index) if quote_strip else None
 
     try:
         for i, eml_path in enumerate(all_paths, 1):
@@ -79,7 +82,6 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
             tid = thread_id_for(msg.message_id, msg.references)
             t8 = thread_stub(tid)
             YYYY, MM = date_shard(msg.date)
-            body = render_body(msg)
 
             # Resolve git blob from raw bytes (cheap, no subprocess)
             from zkm_eml.originals import git_blob_sha1
@@ -139,6 +141,8 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                         except Exception as e:
                             print(f"WARN: inbox symlink failed for {att.filename}: {e}", file=sys.stderr)
 
+            body = render_body(msg, parent_lookup=lookup, dest=dest)
+
             write_message_md(
                 dest,
                 msg,
@@ -151,6 +155,10 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                 source_repo_commit=source_repo_commit,
                 source_blob=source_blob,
             )
+
+            # Register in parent index so later messages in this run can look up this one
+            if lookup is not None:
+                parent_index[msg.message_id] = (dest, original_rel)
 
             created.append(dest)
             existing_ids.add(msg.message_id)
@@ -183,8 +191,12 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
 
     import frontmatter as fm
 
+    quote_strip = config.get("EML_QUOTE_STRIP", "true").lower() not in ("false", "0", "no")
+
     messages_dir = store_path / "mail" / "messages"
-    _, thread_membership = build_thread_membership(messages_dir)
+    _, thread_membership, parent_index = build_thread_membership(messages_dir)
+
+    lookup = _make_parent_lookup(store_path, parent_index) if quote_strip else None
 
     total = len(existing)
     updated: list[Path] = []
@@ -220,7 +232,6 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
 
             tid = thread_id_for(msg.message_id, msg.references)
             t8 = thread_stub(tid)
-            body = render_body(msg)
 
             existing_members = thread_membership.get(tid, [])
             if existing_members:
@@ -236,6 +247,8 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
             source_blob = post.metadata.get("source_blob")
             source_repo_commit = post.metadata.get("source_repo_commit")
             source_path_rel_home = post.metadata.get("source_path")
+
+            body = render_body(msg, parent_lookup=lookup, dest=md_path)
 
             write_message_md(
                 md_path,
@@ -268,3 +281,65 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
     return updated
 
 
+# ---------------------------------------------------------------------------
+# Parent lookup factory for quote stripping
+# ---------------------------------------------------------------------------
+
+def _make_parent_lookup(
+    store_path: Path,
+    parent_index: dict[str, tuple[Path, str | None]],
+):
+    """Return a closure that resolves a message_id to ParentInfo for quote stripping."""
+    cache: dict[str, ParentInfo | None] = {}
+    _warned_no_originals = False
+
+    def lookup(message_id: str) -> ParentInfo | None:
+        nonlocal _warned_no_originals
+        if message_id in cache:
+            return cache[message_id]
+
+        entry = parent_index.get(message_id)
+        if entry is None:
+            cache[message_id] = None
+            return None
+
+        md_path, original_rel = entry
+        plain_body = ""
+        subject = ""
+
+        if original_rel:
+            orig_path = store_path / original_rel
+            if orig_path.exists():
+                try:
+                    pmsg = parse_eml(orig_path)
+                    plain_body = pmsg.plain_body or html_to_markdown(pmsg.html_body)
+                    subject = pmsg.subject
+                except Exception:
+                    pass
+
+        if not plain_body:
+            # Fallback: read rendered .md body (may already be stripped on re-runs)
+            if not _warned_no_originals:
+                print(
+                    "WARN: quote-strip parent lookup falling back to rendered .md body "
+                    "(set EML_KEEP_ORIGINALS=true for accurate matching)",
+                    file=sys.stderr,
+                )
+                _warned_no_originals = True
+            try:
+                import frontmatter as fm
+                post = fm.load(md_path)
+                plain_body = post.content or ""
+                subject = str(post.metadata.get("subject", ""))
+            except Exception:
+                pass
+
+        if not plain_body:
+            cache[message_id] = None
+            return None
+
+        info = ParentInfo(md_path=md_path, plain_body=plain_body, subject=subject)
+        cache[message_id] = info
+        return info
+
+    return lookup

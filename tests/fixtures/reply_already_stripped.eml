@@ -1,0 +1,13 @@
+From: Bob <bob@example.com>
+To: Alice Example <alice@example.com>
+Subject: Re: Hello Bob
+Date: Mon, 13 Apr 2026 18:00:00 +0200
+Message-ID: <reply-stripped-001@example.com>
+In-Reply-To: <hello-001@example.com>
+References: <hello-001@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Thanks for the message!
+
+> *[Quoted from: [Hello Bob](../2026/04/2026-04-13-1230-abcd1234-hello-bob.md)]*

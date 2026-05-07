@@ -1,0 +1,19 @@
+From: Bob <bob@example.com>
+To: Alice Example <alice@example.com>
+Subject: Re: Hello Bob
+Date: Mon, 13 Apr 2026 16:30:00 +0200
+Message-ID: <reply-attr-de-001@example.com>
+In-Reply-To: <hello-001@example.com>
+References: <hello-001@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Danke für die Nachricht!
+
+Am Mon, 13 Apr 2026 schrieb Alice Example <alice@example.com>:
+> Hi Bob,
+>
+> This is a simple test email.
+>
+> Cheers,
+> Alice

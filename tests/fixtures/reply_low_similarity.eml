@@ -1,0 +1,15 @@
+From: Bob <bob@example.com>
+To: Alice Example <alice@example.com>
+Subject: Re: Hello Bob
+Date: Mon, 13 Apr 2026 17:30:00 +0200
+Message-ID: <reply-low-sim-001@example.com>
+In-Reply-To: <hello-001@example.com>
+References: <hello-001@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Completely different topic actually.
+
+> This quoted text has absolutely nothing to do with the parent message.
+> It is entirely fabricated and bears no resemblance to the original.
+> Similarity should be well below ninety percent threshold.
