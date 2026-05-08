@@ -143,8 +143,8 @@ uv tool update-shell   # ensures ~/.local/bin is on PATH
 
 ```bash
 cd ~/src/zkm/plugins/zkm-eml
-make install-hook              # symlinks hooks/post-commit → ~/mail/.git/hooks/post-commit
-make install-hook MAIL=~/work-mail   # custom mail repo
+make install-hook                        # symlinks hooks/post-commit → ~/mail/.git/hooks/post-commit
+make install-hook MAIL_REPO=~/work-mail  # custom mail repo
 ```
 
 **Monitor logs:**
