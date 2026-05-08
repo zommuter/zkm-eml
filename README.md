@@ -128,10 +128,43 @@ After upgrading the plugin (e.g. to v0.7 which adds quote stripping), re-derive 
 zkm convert zkm-eml --reprocess
 ```
 
+## Auto-trigger from mbsync
+
+After mbsync syncs the mail repo, a git post-commit hook can run `zkm convert zkm-eml && zkm index` automatically — no manual invocation needed.
+
+**Prerequisites:** `zkm` must be on PATH. Install once:
+
+```bash
+uv tool install --editable ~/src/zkm
+uv tool update-shell   # ensures ~/.local/bin is on PATH
+```
+
+**Install the hook** (default target: `~/mail`):
+
+```bash
+cd ~/src/zkm/plugins/zkm-eml
+make install-hook              # symlinks hooks/post-commit → ~/mail/.git/hooks/post-commit
+make install-hook MAIL=~/work-mail   # custom mail repo
+```
+
+**Monitor logs:**
+
+```bash
+journalctl -t zkm-eml-hook -n 50
+```
+
+**Remove:**
+
+```bash
+make uninstall-hook
+```
+
+See `docs/install.md` in the zkm repo for full setup details and the `ZKM_BYPASS_DIRTY_CHECK` bypass for development runs.
+
 ## Development
 
 ```bash
-cd ~/src/zkm-eml
+cd ~/src/zkm/plugins/zkm-eml
 uv sync --extra dev
 uv run pytest
 uv run ruff check src/ tests/ convert.py
