@@ -125,3 +125,55 @@ def test_attachment_filename_raw_preserved():
     assert att.filename == "invoice.pdf"
     # For plain ASCII, filename_raw matches filename
     assert att.filename_raw == "invoice.pdf"
+
+
+# ---------------------------------------------------------------------------
+# Mis-declared charset / BOM / mojibake tests
+# ---------------------------------------------------------------------------
+
+
+def test_body_mis_declared_utf8_detected():
+    """Body declared utf-8 but bytes are latin-1 — charset-normalizer detects the real encoding."""
+    msg = parse_eml(FIXTURES / "mis_declared_utf8.eml")
+    assert "ü" in msg.plain_body
+    assert "Ã¼" not in msg.plain_body
+    assert "�" not in msg.plain_body
+
+
+def test_body_mis_declared_latin1_skipped():
+    """Body declared latin-1 (permissive) but bytes are utf-8 — permissive codec is skipped, utf-8 wins."""
+    msg = parse_eml(FIXTURES / "mis_declared_latin1.eml")
+    assert "ü" in msg.plain_body
+    assert "Ã¼" not in msg.plain_body
+    assert "�" not in msg.plain_body
+
+
+def test_body_bom_stripped():
+    """UTF-8 BOM at start of body is stripped from plain_body."""
+    msg = parse_eml(FIXTURES / "bom_utf8_body.eml")
+    assert "﻿" not in msg.plain_body
+    assert "Guten Tag" in msg.plain_body
+    assert "ü" in msg.plain_body
+
+
+def test_subject_mojibake_repaired():
+    """RFC 2047 subject encoded with wrong charset (utf-8 bytes declared as iso-8859-1) is repaired by ftfy."""
+    msg = parse_eml(FIXTURES / "mojibake_subject.eml")
+    assert "für" in msg.subject
+    assert "Ã¼" not in msg.subject
+
+
+def test_body_ascii_declared_latin1_detected():
+    """Body declared us-ascii but contains latin-1 bytes — detection falls back to charset-normalizer."""
+    msg = parse_eml(FIXTURES / "ascii_declared_latin1_bytes.eml")
+    assert "ü" in msg.plain_body
+    assert "Ã¼" not in msg.plain_body
+    assert "�" not in msg.plain_body
+
+
+def test_html_meta_charset_used_when_no_content_type_charset():
+    """HTML body without Content-Type charset falls back to <meta charset=> sniffing."""
+    msg = parse_eml(FIXTURES / "html_meta_charset.eml")
+    assert "ü" in msg.html_body
+    assert "Ã¼" not in msg.html_body
+    assert "�" not in msg.html_body

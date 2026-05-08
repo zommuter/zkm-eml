@@ -1,0 +1,17 @@
+From: alice@example.com
+To: bob@example.com
+Subject: Mis-declared UTF-8
+Date: Mon, 13 Apr 2026 10:00:00 +0200
+Message-ID: <mis-declared-utf8-001@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Sehr geehrte Damen und Herren,
+
+die Preise f=FCr =DCbernachtungen betragen 80 Euro f=FCr ein Einzelzimmer
+und 120 Euro f=FCr ein Doppelzimmer. Die Veranstaltung findet in M=FCnchen
+statt. Wir freuen uns =FCber Ihre Teilnahme und w=FCnschen Ihnen sch=F6ne
+Gr=FC=DFe aus =D6sterreich.
+
+Mit freundlichen Gr=FC=DFen

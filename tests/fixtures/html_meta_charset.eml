@@ -1,0 +1,12 @@
+From: alice@example.com
+To: bob@example.com
+Subject: HTML meta charset
+Date: Mon, 13 Apr 2026 10:00:00 +0200
+Message-ID: <html-meta-charset-001@example.com>
+MIME-Version: 1.0
+Content-Type: text/html
+Content-Transfer-Encoding: quoted-printable
+
+<html><head><meta charset=3D"windows-1252"></head><body>
+<p>Das kostet =FCber 100 Euro.</p>
+</body></html>

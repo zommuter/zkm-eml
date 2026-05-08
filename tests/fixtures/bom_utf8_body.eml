@@ -1,0 +1,10 @@
+From: alice@example.com
+To: bob@example.com
+Subject: BOM UTF-8 body
+Date: Mon, 13 Apr 2026 10:00:00 +0200
+Message-ID: <bom-utf8-body-001@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+=EF=BB=BFGuten Tag, hier ist ein =C3=BCblicher Text.

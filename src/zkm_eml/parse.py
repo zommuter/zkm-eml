@@ -15,6 +15,9 @@ from email.message import EmailMessage
 from email.utils import getaddresses, parsedate_to_datetime
 from pathlib import Path
 
+import ftfy
+from charset_normalizer import from_bytes as _cn_from_bytes
+
 
 from .naming import sanitize_filename
 
@@ -121,9 +124,10 @@ def _decode_header_str(value: str | None) -> str:
     if not value:
         return ""
     try:
-        return str(email.header.make_header(email.header.decode_header(value)))
+        decoded = str(email.header.make_header(email.header.decode_header(value)))
     except Exception:
-        return str(value)
+        decoded = str(value)
+    return _post_decode(decoded)
 
 
 def _synthetic_id(raw: bytes) -> str:
@@ -243,22 +247,76 @@ def _unique_filename(name: str, seen: set[str]) -> str:
         i += 1
 
 
-def _decode_part(part: EmailMessage) -> str:
-    payload = part.get_payload(decode=True)
-    if not isinstance(payload, bytes):
-        return ""
-    declared = part.get_content_charset()
+_PERMISSIVE_CODECS = frozenset({"latin1", "iso88591", "cp1252", "windows1252"})
+
+
+def _try_strict_decode(payload: bytes, declared: str | None, content_type: str) -> str | None:
+    """Try declared charset first, then utf-8 as a strict fallback.
+
+    Permissive codecs (latin-1, cp1252) are trusted when explicitly declared by the
+    sender, but never added as implicit fallbacks — they accept every byte sequence
+    and would mask mis-declared charsets.  When the declared codec is permissive,
+    try utf-8 first; if utf-8 fails, the declared permissive codec is the tiebreaker.
+    """
     candidates: list[str] = []
+
+    # Discover declared charset
     if declared:
-        candidates.append(declared)
-    elif part.get_content_type() == "text/html":
+        declared_norm = declared.lower().replace("-", "").replace("_", "")
+        if declared_norm in _PERMISSIVE_CODECS:
+            # Permissive declared: try utf-8 first, then trust the declaration
+            candidates = ["utf-8", declared]
+        else:
+            candidates = [declared]
+    elif content_type == "text/html":
         m = re.search(rb'charset=["\']?([\w\-]+)', payload[:1024], re.IGNORECASE)
         if m:
             candidates.append(m.group(1).decode("ascii", errors="ignore"))
-    candidates.extend(["utf-8", "cp1252", "latin-1"])
+
+    # Always try utf-8 as a strict fallback (skip if already in list)
+    if "utf-8" not in [c.lower().replace("-", "") for c in candidates]:
+        candidates.append("utf-8")
+
     for cs in candidates:
         try:
             return payload.decode(cs)
         except (UnicodeDecodeError, LookupError):
             continue
-    return payload.decode("utf-8", errors="replace")
+    return None
+
+
+def _detect_decode(payload: bytes) -> str | None:
+    """Use charset-normalizer to detect the encoding and decode."""
+    result = _cn_from_bytes(payload).best()
+    if result is None:
+        return None
+    return str(result)
+
+
+def _post_decode(text: str) -> str:
+    """Strip BOM, repair mojibake with ftfy, NFC-normalize."""
+    text = text.lstrip("﻿")  # UTF-8/UTF-16 BOM
+    text = ftfy.fix_text(
+        text,
+        uncurl_quotes=False,
+        fix_line_breaks=False,
+        fix_latin_ligatures=False,
+        fix_character_width=False,
+        normalization="NFC",
+    )
+    return text
+
+
+def _decode_part(part: EmailMessage) -> str:
+    payload = part.get_payload(decode=True)
+    if not isinstance(payload, bytes):
+        return ""
+    declared = part.get_content_charset()
+
+    text = _try_strict_decode(payload, declared, part.get_content_type())
+    if text is None:
+        text = _detect_decode(payload)
+    if text is None:
+        text = payload.decode("utf-8", errors="replace")
+
+    return _post_decode(text)

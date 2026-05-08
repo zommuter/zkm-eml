@@ -1,0 +1,9 @@
+From: alice@example.com
+To: bob@example.com
+Subject: =?iso-8859-1?B?ZsO8cg==?=
+Date: Mon, 13 Apr 2026 10:00:00 +0200
+Message-ID: <mojibake-subject-001@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Betreff wurde mit falschem Charset kodiert.

@@ -1,0 +1,10 @@
+From: alice@example.com
+To: bob@example.com
+Subject: Mis-declared Latin-1
+Date: Mon, 13 Apr 2026 10:00:00 +0200
+Message-ID: <mis-declared-latin1-001@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=ISO-8859-1
+Content-Transfer-Encoding: quoted-printable
+
+Das kostet =C3=BCber 100 Euro.

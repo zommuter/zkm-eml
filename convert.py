@@ -8,8 +8,14 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+_plugin_root = Path(__file__).parent
 # Allow running from the plugin directory directly during development
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(_plugin_root / "src"))
+# Inject plugin-local venv so plugin-specific deps (ftfy, charset-normalizer) are
+# importable when the plugin is loaded via importlib into the main zkm process.
+_venv_site = list((_plugin_root / ".venv").glob("lib/python*/site-packages"))
+if _venv_site:
+    sys.path.insert(0, str(_venv_site[0]))
 
 from zkm_eml.frontmatter import write_message_md
 from zkm_eml.naming import date_shard, message_slug, slugify, thread_stub, unique_path
