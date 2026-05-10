@@ -12,7 +12,7 @@ dependencies = [
     "markdownify>=0.13",
     "charset-normalizer>=3.3",
     "ftfy>=6.2",
-    "zkm",
+    "zkm>=0.2.0,<0.3.0",
 ]
 
 [project.optional-dependencies]
