@@ -2,6 +2,7 @@
 # Triggered by ~/mail's git repo after each successful mbsync commit.
 # Pipes all output to journald (queryable via: journalctl -t zkm-eml-hook -n 50).
 # Exits 0 unconditionally so a zkm failure never surfaces as a git hook warning.
+export PATH="$HOME/.local/bin:$PATH"
 {
     zkm convert zkm-eml && zkm index --no-embed
 } 2>&1 | systemd-cat -t zkm-eml-hook
