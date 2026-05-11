@@ -9,7 +9,7 @@ import frontmatter
 
 from .parse import ParsedAttachment, ParsedMessage
 
-PLUGIN_NAME = "zkm-eml"
+PLUGIN_NAME = "eml"
 PLUGIN_VERSION = "0.7.0"
 
 

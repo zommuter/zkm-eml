@@ -79,7 +79,7 @@ EML_OWNER_ADDRESSES=you@example.com,you@work.example.com
 ### 4. Convert
 
 ```bash
-zkm convert zkm-eml
+zkm convert eml
 ```
 
 ## Store layout
@@ -125,12 +125,12 @@ cat "$(jq -r .source_path originals/mail/2026-04-13_foo.source.json)"
 After upgrading the plugin (e.g. to v0.7 which adds quote stripping), re-derive all existing markdown from stored originals:
 
 ```bash
-zkm convert zkm-eml --reprocess
+zkm convert eml --reprocess
 ```
 
 ## Auto-trigger from mbsync
 
-After mbsync syncs the mail repo, a git post-commit hook can run `zkm convert zkm-eml && zkm index` automatically — no manual invocation needed.
+After mbsync syncs the mail repo, a git post-commit hook can run `zkm convert eml && zkm index` automatically — no manual invocation needed.
 
 **Prerequisites:** `zkm` must be on PATH. Install once:
 

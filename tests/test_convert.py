@@ -31,7 +31,7 @@ def test_convert_basic(store: Path):
     for p in created:
         assert p.exists()
         post = frontmatter.load(p)
-        assert post.metadata["source"] == "zkm-eml"
+        assert post.metadata["source"] == "eml"
         assert "message_id" in post.metadata
         assert "thread_id" in post.metadata
         assert "thread" in post.metadata

@@ -384,7 +384,7 @@ wheels = [
 
 [[package]]
 name = "zkm"
-version = "0.2.0"
+version = "0.4.0"
 source = { editable = "../../" }
 dependencies = [
     { name = "click" },
@@ -416,7 +416,7 @@ dev = [
 
 [[package]]
 name = "zkm-eml"
-version = "0.6.0"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "charset-normalizer" },

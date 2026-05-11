@@ -176,5 +176,5 @@ uv run pytest
 # To verify:
 
 # Point at a Maildir and run:
-ZKM_STORE=~/knowledge uv run zkm convert zkm-eml
+ZKM_STORE=~/knowledge uv run zkm convert eml
 ```

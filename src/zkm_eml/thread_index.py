@@ -124,7 +124,7 @@ def _write_index(path: Path, thread_id: str, members: list[ThreadMember]) -> Non
     subject = members[0].subject if members else "(thread)"
 
     meta = {
-        "source": "zkm-eml",
+        "source": "eml",
         "thread_id": thread_id,
         "participants": flat_participants,
         "first_date": first_date,
