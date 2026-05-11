@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Triggered by ~/mail's git repo after each successful mbsync commit.
-# Pipes all output to journald (queryable via: journalctl -t zkm-eml-hook -n 50).
+# Full output goes to a log file (journald rate-limits at ~28 lines; log has everything).
+# Journald still receives output for quick queries; log at <store>/.zkm-state/hook-zkm-eml.log.
 # Exits 0 unconditionally so a zkm failure never surfaces as a git hook warning.
 export PATH="$HOME/.local/bin:$PATH"
+LOG="${ZKM_STORE:-$HOME/knowledge}/.zkm-state/hook-zkm-eml.log"
 {
     zkm convert eml && zkm index --no-embed
-} 2>&1 | systemd-cat -t zkm-eml-hook
+} 2>&1 | tee -a "$LOG" | systemd-cat -t zkm-eml-hook
 exit 0
