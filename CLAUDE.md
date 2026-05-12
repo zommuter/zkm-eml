@@ -1,8 +1,7 @@
 # zkm-eml
 
-zkm plugin that converts `.eml` files (RFC 5322 email messages) to markdown in the knowledge store, with thread modeling and full compliance with the [zkm messaging-spec](https://github.com/Zommuter/zkm/blob/main/docs/messaging-spec.md).
+zkm plugin that converts `.eml` files (RFC 5322 email messages) to markdown in the knowledge store, with thread modeling and full compliance with the [zkm messaging-spec](https://github.com/zommuter/zkm/blob/main/docs/messaging-spec.md).
 
-**Repo**: `~/src/zkm/plugins/zkm-eml/`  
 **Store dirs**: `mail/messages/`, `mail/threads/`, `originals/mail/`  
 **Install**: already discovered (repo lives in `zkm/plugins/`); no `zkm plugin add` needed
 
@@ -168,7 +167,7 @@ All test fixtures are **synthetic** — no real email. Never commit real `.eml` 
 ## Development setup
 
 ```bash
-cd ~/src/zkm/plugins/zkm-eml
+cd plugins/zkm-eml
 uv sync --extra dev
 uv run pytest
 

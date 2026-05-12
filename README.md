@@ -1,12 +1,12 @@
 # zkm-eml
 
-[zkm](https://github.com/Zommuter/zkm) plugin that converts Maildir or `.eml` files to markdown in the knowledge store with full thread modeling and attachment extraction.
+[zkm](https://github.com/zommuter/zkm) plugin that converts Maildir or `.eml` files to markdown in the knowledge store with full thread modeling and attachment extraction.
 
 ## What it does
 
 - Reads mail from `~/mail` by default (mbsync Maildir tree) or any directory you point at via `EML_SOURCE_DIR`
 - Handles both Maildir format (files in `cur/`/`new/` without `.eml` extension) and flat `.eml` dumps
-- Writes one `mail/messages/<date>_<slug>.md` per message with frontmatter per the [zkm messaging-spec](https://github.com/Zommuter/zkm/blob/main/docs/messaging-spec.md)
+- Writes one `mail/messages/<date>_<slug>.md` per message with frontmatter per the [zkm messaging-spec](https://github.com/zommuter/zkm/blob/main/docs/messaging-spec.md)
 - Groups messages into threads via RFC 5322 `References` chains — one `mail/threads/<thread_id>.md` per thread, regenerated on every run
 - Collapses full tail-quote blocks into a single `> *[Quoted from: …]*` link — English and German attribution lines ("On … wrote:" / "Am … schrieb:") are detected and removed; interleaved replies and low-similarity quotes are left untouched (`EML_QUOTE_STRIP`)
 - Stores stripped originals in `originals/mail/` (attachment payloads detached, stubs added) — raw bytes reproducible via `git cat-file blob <source_blob>`; body text is always preserved verbatim in the original for round-trip fidelity
@@ -48,11 +48,13 @@ mbsync personal
 
 ### 2. Install the plugin
 
+Clone this repo inside your zkm `plugins/` directory:
+
 ```bash
-zkm plugin add ~/src/zkm-eml
-# or from GitHub once published:
-# zkm plugin add https://github.com/Zommuter/zkm-eml.git
+git clone https://github.com/zommuter/zkm-eml.git plugins/zkm-eml
 ```
+
+The plugin is auto-discovered from that location — no `zkm plugin add` needed.
 
 ### 3. Configure (optional)
 
@@ -135,14 +137,14 @@ After mbsync syncs the mail repo, a git post-commit hook can run `zkm convert em
 **Prerequisites:** `zkm` must be on PATH. Install once:
 
 ```bash
-uv tool install --editable ~/src/zkm
+uv tool install --editable path/to/zkm
 uv tool update-shell   # ensures ~/.local/bin is on PATH
 ```
 
 **Install the hook** (default target: `~/mail`):
 
 ```bash
-cd ~/src/zkm/plugins/zkm-eml
+cd plugins/zkm-eml
 make install-hook                        # symlinks hooks/post-commit → ~/mail/.git/hooks/post-commit
 make install-hook MAIL_REPO=~/work-mail  # custom mail repo
 ```
@@ -164,8 +166,12 @@ See `docs/install.md` in the zkm repo for full setup details and the `ZKM_BYPASS
 ## Development
 
 ```bash
-cd ~/src/zkm/plugins/zkm-eml
+cd plugins/zkm-eml
 uv sync --extra dev
 uv run pytest
 uv run ruff check src/ tests/ convert.py
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE)
