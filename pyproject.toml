@@ -4,17 +4,36 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zkm-eml"
-version = "0.7.0"
+version = "0.8.0"
 description = "zkm plugin: convert .eml files to markdown with thread modeling"
 license = "MIT"
 requires-python = ">=3.14"
+authors = [{name = "Tobias Kienzler", email = "zommuter@googlemail.com"}]
+keywords = ["knowledge-management", "markdown", "personal-data", "email", "mbox", "imap"]
+readme = "README.md"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Office/Business",
+    "Topic :: Text Processing",
+    "Typing :: Typed",
+]
 dependencies = [
     "python-frontmatter>=1.1",
     "markdownify>=0.13",
     "charset-normalizer>=3.3",
     "ftfy>=6.2",
-    "zkm>=0.3.0,<0.4.0",
+    "zkm>=0.4,<1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/zommuter/zkm"
+Repository = "https://github.com/zommuter/zkm-eml"
+Issues = "https://github.com/zommuter/zkm-eml/issues"
 
 [project.optional-dependencies]
 dev = [
