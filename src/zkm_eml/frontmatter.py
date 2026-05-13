@@ -24,6 +24,8 @@ def write_message_md(
     source_path_rel_home: str | None = None,
     source_repo_commit: str | None = None,
     source_blob: str | None = None,
+    signature_block: str | None = None,
+    salutation_block: str | None = None,
 ) -> None:
     """Write (or overwrite) the markdown file for one message."""
     meta: dict = {
@@ -57,6 +59,10 @@ def write_message_md(
             _att_entry(att, rel_path)
             for att, rel_path in attachment_meta
         ]
+    if signature_block:
+        meta["signature_block"] = signature_block
+    if salutation_block:
+        meta["salutation_block"] = salutation_block
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     post = frontmatter.Post(body, **meta)

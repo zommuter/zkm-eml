@@ -23,7 +23,7 @@ from zkm.cas import write_object
 from zkm.inbox import build_canonical_index, symlink_with_sidecar
 from zkm_eml.originals import find_git_root, git_head, resolve_source_meta, write_original
 from zkm_eml.parse import parse_eml
-from zkm_eml.render import ParentInfo, html_to_markdown, render_body
+from zkm_eml.render import ParentInfo, html_to_markdown, render_body, split_body_sections
 from zkm_eml.source import default_exclude_folders, iter_messages, iter_messages_since
 from zkm_eml.state import get_last_commit, set_last_commit
 from zkm_eml.thread_index import ThreadMember, build_thread_membership, write_thread_index
@@ -161,6 +161,7 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                             print(f"WARN: inbox symlink failed for {att.filename}: {e}", file=sys.stderr)
 
             body = render_body(msg, parent_lookup=lookup, dest=dest)
+            salutation_block, signature_block = split_body_sections(body)
 
             write_message_md(
                 dest,
@@ -173,6 +174,8 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                 source_path_rel_home=src_rel_home,
                 source_repo_commit=source_repo_commit,
                 source_blob=source_blob,
+                signature_block=signature_block,
+                salutation_block=salutation_block,
             )
 
             # Register in parent index so later messages in this run can look up this one
