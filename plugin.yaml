@@ -9,27 +9,41 @@ creates_dirs:
   - inbox
 
 config:
-  EML_SOURCE_DIR:
+  source_dir:
     required: false
-    default: "~/mail"
+    default: ~/mail
     description: Mail source. Maildir tree (mbsync) or flat .eml dump. Scanned recursively, read-only. Defaults to ~/mail.
-  EML_FOLDERS_EXCLUDE:
+  folders_exclude:
     required: false
-    default: "Trash,Junk,Spam,Spamverdacht,Virusverdacht,Gelöscht,[Google Mail]/Trash,[Google Mail]/Spam,Drafts,Entwürfe"
-    description: Comma-separated folder name patterns to skip (case-insensitive, matched on any path segment). If empty, built-in defaults apply.
-  EML_KEEP_ORIGINALS:
+    default:
+      - Trash
+      - Junk
+      - Spam
+      - Spamverdacht
+      - Virusverdacht
+      - "Gelöscht"
+      - "[Google Mail]/Trash"
+      - "[Google Mail]/Spam"
+      - Drafts
+      - "Entwürfe"
+    description: Folder name patterns to skip (case-insensitive, matched on any path segment). If empty, built-in defaults apply.
+  keep_originals:
     required: false
-    default: "true"
+    default: true
     description: Store stripped .eml + detached attachments under originals/mail/ for --reprocess support.
-  EML_OWNER_ADDRESSES:
+  owner_addresses:
     required: false
     default: ""
     description: Comma-separated list of the store owner's email addresses. Reserved for future use by search/UI (my-identities config); not consumed during convert.
-  EML_ATTACHMENT_INBOX:
+  attachment_inbox:
     required: false
-    default: "true"
+    default: true
     description: Symlink detached attachments into inbox/ so other plugins (pdf, photo, recursive eml) can pick them up.
-  EML_QUOTE_STRIP:
+  quote_strip:
     required: false
-    default: "true"
-    description: Collapse full tail-quote blocks into a single link line referencing the parent message. Requires EML_KEEP_ORIGINALS=true for accurate matching. Set false to preserve raw quoted text.
+    default: true
+    description: Collapse full tail-quote blocks into a single link line referencing the parent message. Requires keep_originals=true for accurate matching. Set false to preserve raw quoted text.
+  slug_ascii:
+    required: false
+    default: false
+    description: Force ASCII-only slugs (strip accents/umlauts). Default false keeps Unicode.

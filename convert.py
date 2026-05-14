@@ -32,22 +32,24 @@ from zkm_eml.threading import thread_id_for
 
 
 def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
-    src_raw = config.get("EML_SOURCE_DIR", "").strip()
+    src_raw = str(config.get("source_dir", "")).strip()
     src = Path(src_raw).expanduser().resolve() if src_raw else Path.home() / "mail"
     if not src.exists():
-        raise FileNotFoundError(f"EML_SOURCE_DIR does not exist: {src}")
+        raise FileNotFoundError(f"source_dir does not exist: {src}")
 
-    exclude_raw = config.get("EML_FOLDERS_EXCLUDE", "")
-    if exclude_raw.strip():
-        exclude_folders = [p.strip() for p in exclude_raw.split(",") if p.strip()]
+    excl_raw = config.get("folders_exclude", "")
+    if isinstance(excl_raw, list):
+        exclude_folders = [s for s in excl_raw if s] or default_exclude_folders()
     else:
-        exclude_folders = default_exclude_folders()
+        raw_str = str(excl_raw).strip()
+        exclude_folders = [p.strip() for p in raw_str.split(",") if p.strip()] if raw_str else default_exclude_folders()
 
-    keep_originals = config.get("EML_KEEP_ORIGINALS", "true").lower() not in ("false", "0", "no")
-    attachment_inbox = config.get("EML_ATTACHMENT_INBOX", "true").lower() not in ("false", "0", "no")
-    quote_strip = config.get("EML_QUOTE_STRIP", "true").lower() not in ("false", "0", "no")
+    keep_originals = bool(config.get("keep_originals", True))
+    attachment_inbox = bool(config.get("attachment_inbox", True))
+    quote_strip = bool(config.get("quote_strip", True))
+    slug_ascii = bool(config.get("slug_ascii", False))
 
-    limit_recent = int(config.get("EML_LIMIT_RECENT", "0") or "0")
+    limit_recent = int(config.get("limit_recent", 0) or 0)
 
     messages_dir = store_path / "mail" / "messages"
     for d in ["mail/messages", "mail/threads", "mail/_objects", "originals/mail", "inbox"]:
@@ -113,7 +115,7 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
             # Build sharded message path; resolve collision suffix once and reuse for originals.
             thread_dir = messages_dir / YYYY / MM
             thread_dir.mkdir(parents=True, exist_ok=True)
-            stem = f"{msg.date.strftime('%Y-%m-%d-%H%M')}-{t8}-{message_slug(msg.subject, msg.from_addr)}"
+            stem = f"{msg.date.strftime('%Y-%m-%d-%H%M')}-{t8}-{message_slug(msg.subject, msg.from_addr, slug_ascii=slug_ascii)}"
             dest = unique_path(thread_dir, stem)
             msg_stem = dest.stem
 
@@ -218,7 +220,7 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
 
     import frontmatter as fm
 
-    quote_strip = config.get("EML_QUOTE_STRIP", "true").lower() not in ("false", "0", "no")
+    quote_strip = bool(config.get("quote_strip", True))
 
     messages_dir = store_path / "mail" / "messages"
     _, thread_membership, parent_index = build_thread_membership(messages_dir)

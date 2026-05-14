@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import os
 import re
 import unicodedata
 from datetime import datetime
 from pathlib import Path
 
-_SLUG_ASCII = os.environ.get("EML_SLUG_ASCII", "").lower() in {"1", "true", "yes"}
 
-
-def slugify(s: str) -> str:
+def slugify(s: str, *, slug_ascii: bool = False) -> str:
     s = unicodedata.normalize("NFC", s)
-    if _SLUG_ASCII:
+    if slug_ascii:
         s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
     s = re.sub(r"^(re|aw|fwd|fw):\s*", "", s.lower().strip())
     s = re.sub(r"[^\w\- ]+", "", s)
@@ -21,16 +18,16 @@ def slugify(s: str) -> str:
     return s[:60]
 
 
-def message_slug(subject: str, from_addr: str) -> str:
+def message_slug(subject: str, from_addr: str, *, slug_ascii: bool = False) -> str:
     """Return a human-readable slug for a message.
 
     Falls back to the sender's local-part when subject is empty.
     """
-    slug = slugify(subject)
+    slug = slugify(subject, slug_ascii=slug_ascii)
     if slug:
         return slug
     m = re.search(r"<([^>@]+)@", from_addr) or re.search(r"^([^@\s<]+)@", from_addr.strip())
-    local = slugify(m.group(1)) if m else ""
+    local = slugify(m.group(1), slug_ascii=slug_ascii) if m else ""
     return (f"from-{local}" if local else "from-unknown")[:60]
 
 
