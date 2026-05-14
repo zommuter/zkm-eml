@@ -18,6 +18,17 @@ from pathlib import Path
 import ftfy
 from charset_normalizer import from_bytes as _cn_from_bytes
 
+def _magic_sniff(data: bytes, fallback_ct: str) -> str:
+    """Detect MIME type from bytes via python-magic; fall back to declared type."""
+    if not data:
+        return fallback_ct
+    try:
+        import magic  # python-magic optional dep
+        sniffed = magic.from_buffer(data[:4096], mime=True)
+        return sniffed if sniffed else fallback_ct
+    except Exception:  # ImportError or libmagic error
+        return fallback_ct
+
 
 from .naming import sanitize_filename
 
@@ -202,7 +213,13 @@ def _extract_parts(msg: EmailMessage) -> tuple[str, str, list[ParsedAttachment]]
 
             raw_filename_raw = part.get_filename() or ""
             raw_filename = _decode_header_str(raw_filename_raw)
-            ext = mimetypes.guess_extension(content_type.split(";")[0].strip()) or ""
+            # When no filename is declared, sniff the actual type for a better extension.
+            effective_ct = (
+                _magic_sniff(raw_payload, content_type)
+                if not raw_filename
+                else content_type
+            )
+            ext = mimetypes.guess_extension(effective_ct.split(";")[0].strip()) or ""
             fallback = f"part-{idx}{ext}"
             base_name = unicodedata.normalize("NFC", sanitize_filename(raw_filename, fallback))
             # Collision-suffix within this message

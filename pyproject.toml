@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zkm-eml"
-version = "0.8.0"
+version = "0.9.0"
 description = "zkm plugin: convert .eml files to markdown with thread modeling"
 license = "MIT"
 requires-python = ">=3.11"
@@ -39,6 +39,9 @@ Repository = "https://github.com/zommuter/zkm-eml"
 Issues = "https://github.com/zommuter/zkm-eml/issues"
 
 [project.optional-dependencies]
+magic = [
+    "python-magic>=0.4",
+]
 dev = [
     "pytest>=8",
     "ruff>=0.4",

@@ -201,6 +201,101 @@ def git_head(repo: Path) -> str | None:
     return None
 
 
+def detect_git_object_format(repo: Path) -> str:
+    """Return ``'sha256'`` or ``'sha1'`` for the object format of *repo*.
+
+    Falls back to ``'sha1'`` on any error or when the command is unavailable
+    (git < 2.29 does not support ``--show-object-format``).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-object-format"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            fmt = result.stdout.strip()
+            if fmt in ("sha1", "sha256"):
+                return fmt
+    except Exception:
+        pass
+    return "sha1"
+
+
+def gc_mail_objects(
+    store_path: Path,
+    *,
+    dry_run: bool = True,
+) -> dict:
+    """Remove orphaned mail CAS objects (all producers reference deleted messages).
+
+    Skips any CAS object that is still referenced by an inbox/ symlink so the
+    core ``zkm gc`` keeps ownership of those.  Returns stats dict with keys
+    ``orphaned``, ``deleted``, ``errors``, ``objects`` (list of candidate paths).
+    """
+    objects_dir = store_path / "mail" / "_objects"
+    if not objects_dir.exists():
+        return {"orphaned": 0, "deleted": 0, "errors": 0, "objects": []}
+
+    # Build set of resolved CAS object paths still referenced by inbox symlinks
+    inbox_targets: set[str] = set()
+    inbox_dir = store_path / "inbox"
+    if inbox_dir.exists():
+        for link in inbox_dir.rglob("*"):
+            if link.is_symlink():
+                try:
+                    inbox_targets.add(str(link.resolve()))
+                except OSError:
+                    pass
+
+    orphaned_pairs: list[tuple[Path, Path]] = []
+    errors = 0
+
+    for sidecar_path in sorted(objects_dir.rglob("*.json")):
+        obj_path = sidecar_path.with_suffix("")
+        try:
+            data = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        except Exception:
+            errors += 1
+            continue
+
+        producers = data.get("producers", [])
+        if producers:
+            # Orphaned if every producer's message no longer exists in the store
+            all_gone = all(
+                not (store_path / p["message"]).exists()
+                for p in producers
+                if p.get("message")
+            )
+            if not all_gone:
+                continue
+
+        # Skip objects still referenced by an active inbox symlink
+        if str(obj_path.resolve()) in inbox_targets:
+            continue
+
+        orphaned_pairs.append((obj_path, sidecar_path))
+
+    deleted = 0
+    if not dry_run:
+        for obj_path, sidecar_path in orphaned_pairs:
+            for p in (sidecar_path, obj_path):
+                try:
+                    p.unlink()
+                    deleted += 1
+                except FileNotFoundError:
+                    pass
+
+    return {
+        "orphaned": len(orphaned_pairs),
+        "deleted": deleted,
+        "errors": errors,
+        "objects": [str(op) for op, _ in orphaned_pairs],
+    }
+
+
 def backfill_sidecars(store_path: Path) -> tuple[int, int]:
     """Backfill per-attachment and per-CAS sidecars for existing originals.
 

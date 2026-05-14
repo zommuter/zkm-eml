@@ -57,7 +57,7 @@ def test_cas_object_written(store: Path):
     objects_dir = store / "mail" / "_objects"
     assert objects_dir.exists()
     objects = list(objects_dir.rglob("*"))
-    cas_files = [p for p in objects if p.is_file() and not p.suffix == ".json"]
+    cas_files = [p for p in objects if p.is_file() and "." not in p.name]
     assert len(cas_files) > 0
 
     # Verify CAS file content integrity (sidecars excluded)
@@ -85,7 +85,7 @@ def test_cas_deduplication(store: Path):
     convert(store, config)
 
     objects_dir = store / "mail" / "_objects"
-    cas_files = [p for p in objects_dir.rglob("*") if p.is_file() and not p.suffix == ".json"]
+    cas_files = [p for p in objects_dir.rglob("*") if p.is_file() and "." not in p.name]
     # Both messages share the same PDF payload — only one CAS object
     assert len(cas_files) == 1
 

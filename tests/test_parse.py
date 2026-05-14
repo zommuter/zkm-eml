@@ -177,3 +177,74 @@ def test_html_meta_charset_used_when_no_content_type_charset():
     assert "ü" in msg.html_body
     assert "Ã¼" not in msg.html_body
     assert "�" not in msg.html_body
+
+
+# ---------------------------------------------------------------------------
+# M7 — _magic_sniff (MIME type sniffing for synthesized filenames)
+# ---------------------------------------------------------------------------
+
+from zkm_eml.parse import _magic_sniff  # noqa: E402
+
+
+def test_magic_sniff_fallback_on_import_error():
+    """When python-magic is not importable, fall back to declared type."""
+    import builtins
+    real_import = builtins.__import__
+
+    def mock_import(name, *args, **kwargs):
+        if name == "magic":
+            raise ImportError("no magic")
+        return real_import(name, *args, **kwargs)
+
+    import builtins
+    builtins.__import__ = mock_import
+    try:
+        result = _magic_sniff(b"%PDF-1.4", "application/octet-stream")
+    finally:
+        builtins.__import__ = real_import
+
+    # With magic blocked, should return the fallback
+    assert result == "application/octet-stream"
+
+
+def test_magic_sniff_empty_data_returns_fallback():
+    assert _magic_sniff(b"", "application/octet-stream") == "application/octet-stream"
+
+
+def test_magic_sniff_not_called_when_filename_present():
+    """Synthesized filename branch only activates when raw_filename is empty."""
+    # This is a parse-level integration check: an attachment with a declared filename
+    # should keep its declared content_type unchanged (no sniffing).
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.base import MIMEBase
+    from email.encoders import encode_base64
+
+    msg = MIMEMultipart()
+    msg["From"] = "a@example.com"
+    msg["To"] = "b@example.com"
+    msg["Subject"] = "attach"
+    msg["Date"] = "Mon, 1 Jan 2024 12:00:00 +0000"
+    msg["Message-ID"] = "<test-magic@example.com>"
+
+    part = MIMEBase("application", "octet-stream")
+    part.set_payload(b"%PDF-1.4 fake")
+    encode_base64(part)
+    part.add_header("Content-Disposition", "attachment", filename="myfile.dat")
+    msg.attach(part)
+
+    from zkm_eml.parse import parse_eml
+    import tempfile, os
+    raw = msg.as_bytes()
+    with tempfile.NamedTemporaryFile(suffix=".eml", delete=False) as f:
+        f.write(raw)
+        tmp = f.name
+    try:
+        parsed = parse_eml(Path(tmp))
+    finally:
+        os.unlink(tmp)
+
+    assert len(parsed.attachments) == 1
+    att = parsed.attachments[0]
+    # Declared filename preserved — content_type should be the declared one
+    assert att.filename == "myfile.dat"
+    assert att.content_type == "application/octet-stream"

@@ -21,7 +21,8 @@ from zkm_eml.frontmatter import write_message_md
 from zkm_eml.naming import date_shard, message_slug, slugify, thread_stub, unique_path
 from zkm.cas import write_object
 from zkm.inbox import build_canonical_index, symlink_with_sidecar
-from zkm_eml.originals import find_git_root, git_head, resolve_source_meta, write_original
+from zkm.hashing import git_blob_hash_bytes
+from zkm_eml.originals import detect_git_object_format, find_git_root, git_head, resolve_source_meta, write_original
 from zkm_eml.parse import parse_eml
 from zkm_eml.render import ParentInfo, html_to_markdown, render_body, split_body_sections
 from zkm_eml.source import default_exclude_folders, iter_messages, iter_messages_since
@@ -63,6 +64,7 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
     # Git-commit watermark: enumerate only messages touched since last run.
     # Falls back to full scan when the source isn't a git repo or watermark is absent/invalid.
     _src_repo = find_git_root(src)
+    _src_fmt = detect_git_object_format(_src_repo) if _src_repo else "sha1"
     _since = get_last_commit(store_path, _src_repo) if _src_repo else None
     _fast_path_used = False
     if _src_repo and _since:
@@ -100,9 +102,7 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
             t8 = thread_stub(tid)
             YYYY, MM = date_shard(msg.date)
 
-            # Resolve git blob from raw bytes (cheap, no subprocess)
-            from zkm.hashing import git_blob_sha1_bytes
-            source_blob = git_blob_sha1_bytes(raw)
+            source_blob = git_blob_hash_bytes(raw, _src_fmt)
 
             home = Path.home()
             try:
