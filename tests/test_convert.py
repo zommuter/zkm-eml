@@ -25,7 +25,7 @@ def store(tmp_path: Path) -> Path:
 
 
 def test_convert_basic(store: Path):
-    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "false"}
+    config = {"source_dir": str(FIXTURES), "keep_originals": False}
     created = convert(store, config)
     assert len(created) >= 1
     for p in created:
@@ -40,7 +40,7 @@ def test_convert_basic(store: Path):
 
 
 def test_convert_idempotent(store: Path):
-    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "false"}
+    config = {"source_dir": str(FIXTURES), "keep_originals": False}
     first = convert(store, config)
     second = convert(store, config)
     assert len(first) > 0
@@ -48,7 +48,7 @@ def test_convert_idempotent(store: Path):
 
 
 def test_convert_thread_index_created(store: Path):
-    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "false"}
+    config = {"source_dir": str(FIXTURES), "keep_originals": False}
     convert(store, config)
     thread_files = list((store / "mail" / "threads").rglob("*.md"))
     assert len(thread_files) >= 1
@@ -60,7 +60,7 @@ def test_convert_thread_index_created(store: Path):
 
 
 def test_convert_reply_shares_thread_id(store: Path):
-    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "false"}
+    config = {"source_dir": str(FIXTURES), "keep_originals": False}
     convert(store, config)
     messages_dir = store / "mail" / "messages"
     mds = list(messages_dir.rglob("*.md"))
@@ -82,7 +82,7 @@ def test_convert_reply_shares_thread_id(store: Path):
 
 
 def test_convert_keeps_originals(store: Path):
-    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "true"}
+    config = {"source_dir": str(FIXTURES), "keep_originals": True}
     convert(store, config)
     originals = list((store / "originals" / "mail").rglob("*.eml"))
     assert len(originals) >= 1
@@ -90,7 +90,7 @@ def test_convert_keeps_originals(store: Path):
 
 def test_convert_participant_roles(store: Path):
     """Participants are emitted as role-tagged dicts; no direction field."""
-    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "false"}
+    config = {"source_dir": str(FIXTURES), "keep_originals": False}
     convert(store, config)
     messages_dir = store / "mail" / "messages"
     by_subject: dict = {}
@@ -115,7 +115,7 @@ def test_convert_participant_roles(store: Path):
 
 
 def test_convert_progress_callback(store: Path):
-    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "false"}
+    config = {"source_dir": str(FIXTURES), "keep_originals": False}
     calls: list[tuple[int, int | None, str]] = []
     created = convert(store, config, progress=lambda c, t, m: calls.append((c, t, m)))
     assert len(calls) > 0
@@ -132,7 +132,7 @@ def test_convert_progress_callback(store: Path):
 
 
 def test_reprocess_updates_existing(store: Path):
-    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "true"}
+    config = {"source_dir": str(FIXTURES), "keep_originals": True}
     created = convert(store, config)
     assert len(created) > 0
     updated = reprocess(store, config, created)
@@ -142,7 +142,7 @@ def test_reprocess_updates_existing(store: Path):
 
 
 def test_message_paths_are_date_sharded(store: Path):
-    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "false"}
+    config = {"source_dir": str(FIXTURES), "keep_originals": False}
     created = convert(store, config)
     assert len(created) >= 1
     for p in created:
@@ -163,7 +163,7 @@ def test_message_paths_are_date_sharded(store: Path):
 
 
 def test_thread_paths_are_date_sharded(store: Path):
-    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "false"}
+    config = {"source_dir": str(FIXTURES), "keep_originals": False}
     convert(store, config)
     threads_dir = store / "mail" / "threads"
     thread_files = list(threads_dir.rglob("*.md"))
@@ -190,7 +190,7 @@ def test_limit_recent(store: Path, tmp_path: Path):
         mtime = 1000000 + idx * 1000
         os.utime(dest, (mtime, mtime))
 
-    config = {"EML_SOURCE_DIR": str(src), "EML_KEEP_ORIGINALS": "false", "EML_LIMIT_RECENT": "2"}
+    config = {"source_dir": str(src), "keep_originals": False, "limit_recent": 2}
     created = convert(store, config)
     assert len(created) == 2
 
@@ -205,7 +205,7 @@ def _make_chain_store(store: Path, tmp_path: Path) -> tuple[Path, list[Path]]:
     chain_src.mkdir()
     for name in ["chain_a.eml", "chain_b.eml", "chain_c.eml", "chain_d.eml"]:
         shutil.copy(FIXTURES / name, chain_src / name)
-    config = {"EML_SOURCE_DIR": str(chain_src), "EML_KEEP_ORIGINALS": "true"}
+    config = {"source_dir": str(chain_src), "keep_originals": True}
     created = convert(store, config)
     assert len(created) == 4
     # Reprocess so all parent lookups can resolve across the full set
@@ -238,7 +238,7 @@ def _body_by_message_id(store: Path, message_id: str) -> str:
 
 def test_quote_strip_collapses_simple_reply(store: Path, tmp_path: Path):
     """reply.eml (reply-001) should have its quoted section collapsed."""
-    config = {"EML_SOURCE_DIR": str(FIXTURES), "EML_KEEP_ORIGINALS": "true"}
+    config = {"source_dir": str(FIXTURES), "keep_originals": True}
     created = convert(store, config)
     reprocess(store, config, created)
 
@@ -275,9 +275,9 @@ def test_quote_strip_disabled(store: Path, tmp_path: Path):
     for name in ["chain_a.eml", "chain_b.eml"]:
         shutil.copy(FIXTURES / name, chain_src / name)
     config = {
-        "EML_SOURCE_DIR": str(chain_src),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_QUOTE_STRIP": "false",
+        "source_dir": str(chain_src),
+        "keep_originals": True,
+        "quote_strip": False,
     }
     created = convert(store, config)
     reprocess(store, config, created)
@@ -293,7 +293,7 @@ def test_quote_strip_idempotent(store: Path, tmp_path: Path):
     chain_src.mkdir()
     for name in ["chain_a.eml", "chain_b.eml"]:
         shutil.copy(FIXTURES / name, chain_src / name)
-    config = {"EML_SOURCE_DIR": str(chain_src), "EML_KEEP_ORIGINALS": "true"}
+    config = {"source_dir": str(chain_src), "keep_originals": True}
     created = convert(store, config)
     reprocess(store, config, created)
 
@@ -326,7 +326,7 @@ def test_round_trip_originals_body_unchanged(store: Path, tmp_path: Path):
         for name in ["chain_a.eml", "chain_b.eml", "chain_c.eml"]
     }
 
-    config = {"EML_SOURCE_DIR": str(chain_src), "EML_KEEP_ORIGINALS": "true"}
+    config = {"source_dir": str(chain_src), "keep_originals": True}
     convert(store, config)
 
     originals_dir = store / "originals" / "mail"
@@ -385,7 +385,7 @@ def test_watermark_written_after_convert(tmp_path: Path) -> None:
     for d in ["mail/messages", "mail/threads", "originals/mail"]:
         (store / d).mkdir(parents=True)
 
-    config = {"EML_SOURCE_DIR": str(src), "EML_KEEP_ORIGINALS": "false"}
+    config = {"source_dir": str(src), "keep_originals": False}
     convert(store, config)
 
     assert get_last_commit(store, src) == sha
@@ -403,7 +403,7 @@ def test_watermark_second_run_skips_existing(tmp_path: Path) -> None:
     for d in ["mail/messages", "mail/threads", "originals/mail"]:
         (store / d).mkdir(parents=True)
 
-    config = {"EML_SOURCE_DIR": str(src), "EML_KEEP_ORIGINALS": "false"}
+    config = {"source_dir": str(src), "keep_originals": False}
     created1 = convert(store, config)
     assert len(created1) >= 1
 
@@ -425,9 +425,120 @@ def test_watermark_keys_by_repo_not_subdir(tmp_path: Path) -> None:
     for d in ["mail/messages", "mail/threads", "originals/mail"]:
         (store / d).mkdir(parents=True)
 
-    config1 = {"EML_SOURCE_DIR": str(repo / "inbox1"), "EML_KEEP_ORIGINALS": "false"}
+    config1 = {"source_dir": str(repo / "inbox1"), "keep_originals": False}
     convert(store, config1)
     state = read_state(store)
     # Key is the repo root, not the subdir
     assert str(repo) in state
     assert str(repo / "inbox1") not in state
+
+
+# ---------------------------------------------------------------------------
+# M3: Deleted-mail policy tests
+# ---------------------------------------------------------------------------
+
+_DEL_EML_TMPL = (
+    b"From: sender@example.com\r\n"
+    b"To: rcpt@example.com\r\n"
+    b"Message-ID: {mid}\r\n"
+    b"Subject: Deletion policy test\r\n"
+    b"Date: Thu, 01 Jan 2026 12:00:00 +0000\r\n"
+    b"\r\n"
+    b"Test body for deletion policy.\r\n"
+)
+
+
+def _del_eml(src: Path, fname: str, mid: str) -> Path:
+    p = src / fname
+    p.write_bytes(_DEL_EML_TMPL.replace(b"{mid}", mid.encode()))
+    return p
+
+
+def _del_store(tmp_path: Path, name: str = "store") -> Path:
+    s = tmp_path / name
+    s.mkdir()
+    (s / ".git").mkdir()
+    for d in ["mail/messages", "mail/threads", "originals/mail"]:
+        (s / d).mkdir(parents=True)
+    return s
+
+
+def test_deleted_policy_keep(tmp_path: Path) -> None:
+    """Policy 'keep' (default): deleted source mail stays in store unchanged."""
+    src = _make_git_src(tmp_path)
+    _del_eml(src, "a.eml", "<del-keep@zkm-test>")
+    _commit_all(src, "add a.eml")
+    store = _del_store(tmp_path)
+
+    cfg = {"source_dir": str(src), "keep_originals": False, "deleted_policy": "keep"}
+    created = convert(store, cfg)
+    assert len(created) == 1
+    md = created[0]
+
+    _git(["rm", "a.eml"], src)
+    _commit_all(src, "delete a.eml")
+
+    convert(store, cfg)
+    assert md.exists()
+    post = frontmatter.load(md)
+    assert "source_deleted" not in post.metadata
+
+
+def test_deleted_policy_log(tmp_path: Path, capsys) -> None:
+    """Policy 'log': deleted source mail stays, stderr notice is emitted."""
+    src = _make_git_src(tmp_path)
+    _del_eml(src, "a.eml", "<del-log@zkm-test>")
+    _commit_all(src, "add a.eml")
+    store = _del_store(tmp_path)
+
+    cfg = {"source_dir": str(src), "keep_originals": False, "deleted_policy": "log"}
+    created = convert(store, cfg)
+    assert len(created) == 1
+    md = created[0]
+
+    _git(["rm", "a.eml"], src)
+    _commit_all(src, "delete a.eml")
+
+    convert(store, cfg)
+    assert md.exists()
+    assert "source deleted" in capsys.readouterr().err.lower()
+
+
+def test_deleted_policy_purge(tmp_path: Path) -> None:
+    """Policy 'purge': deleted source mail is removed from the store."""
+    src = _make_git_src(tmp_path)
+    _del_eml(src, "a.eml", "<del-purge@zkm-test>")
+    _commit_all(src, "add a.eml")
+    store = _del_store(tmp_path)
+
+    cfg = {"source_dir": str(src), "keep_originals": False, "deleted_policy": "purge"}
+    created = convert(store, cfg)
+    assert len(created) == 1
+    md = created[0]
+
+    _git(["rm", "a.eml"], src)
+    _commit_all(src, "delete a.eml")
+
+    convert(store, cfg)
+    assert not md.exists()
+
+
+def test_deleted_policy_archive(tmp_path: Path) -> None:
+    """Policy 'archive': deleted source mail gains source_deleted=true in frontmatter."""
+    src = _make_git_src(tmp_path)
+    _del_eml(src, "a.eml", "<del-archive@zkm-test>")
+    _commit_all(src, "add a.eml")
+    store = _del_store(tmp_path)
+
+    cfg = {"source_dir": str(src), "keep_originals": False, "deleted_policy": "archive"}
+    created = convert(store, cfg)
+    assert len(created) == 1
+    md = created[0]
+
+    _git(["rm", "a.eml"], src)
+    _commit_all(src, "delete a.eml")
+
+    convert(store, cfg)
+    assert md.exists()
+    post = frontmatter.load(md)
+    assert post.metadata.get("source_deleted") is True
