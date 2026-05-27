@@ -1,5 +1,5 @@
 name: eml
-version: 0.7.0
+version: 0.10.0
 description: Convert Maildir or .eml files to markdown with thread modeling and attachment extraction.
 
 creates_dirs:
@@ -47,3 +47,7 @@ config:
     required: false
     default: false
     description: Force ASCII-only slugs (strip accents/umlauts). Default false keeps Unicode.
+  deleted_policy:
+    required: false
+    default: keep
+    description: "What to do when a source mail is deleted between runs (git-backed sources only). Options: keep (default — preserve .md unchanged), log (preserve + stderr notice), purge (remove .md; run 'zkm gc' afterwards to clean originals), archive (mark source_deleted: true in frontmatter)."

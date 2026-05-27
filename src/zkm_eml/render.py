@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import mimetypes
 import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .parse import ParsedMessage
+from .parse import ParsedAttachment, ParsedMessage
 from .quote_strip import strip_full_quote
 
 # ---------------------------------------------------------------------------
@@ -119,6 +122,80 @@ def render_body(
 
 def html_to_markdown(html: str) -> str:
     return _html_to_markdown(html)
+
+
+# ---------------------------------------------------------------------------
+# Data-URI detach
+# ---------------------------------------------------------------------------
+
+_DATA_URI_SRC_RE = re.compile(
+    r'\bsrc\s*=\s*(["\'])(data:([^;,\'\"]+);base64,([^\'\"]+))\1',
+    re.IGNORECASE,
+)
+
+_COMMON_EXTS: dict[str, str] = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "image/svg+xml": ".svg",
+    "image/bmp": ".bmp",
+    "image/tiff": ".tiff",
+    "image/x-icon": ".ico",
+}
+
+
+def detach_html_data_uris(html: str) -> tuple[str, list[ParsedAttachment]]:
+    """Extract inline data-URI images from an HTML body.
+
+    Returns ``(cleaned_html, attachments)``.  The cleaned HTML has each
+    ``src="data:..."`` value replaced with ``src=""`` so markdownify emits a
+    clean body.  Each returned :class:`ParsedAttachment` has
+    ``part_index=-1``, ``is_inline=True``, ``referenced_in_html=True``;
+    the caller should extend ``msg.attachments`` with them before calling
+    ``write_original`` so they are stored via the normal CAS + sidecar path.
+
+    Duplicate data URIs (same sha256) produce a single attachment entry.
+    """
+    if "data:" not in html:
+        return html, []
+
+    new_atts: list[ParsedAttachment] = []
+    seen_sha: set[str] = set()
+
+    def _replace(m: re.Match) -> str:
+        q = m.group(1)
+        mediatype = m.group(3).strip().lower().split(";")[0]
+        b64_raw = m.group(4)
+        try:
+            b64_clean = re.sub(r"\s+", "", b64_raw)
+            payload = base64.b64decode(b64_clean)
+        except Exception:
+            return m.group(0)  # leave unchanged on decode error
+
+        sha = hashlib.sha256(payload).hexdigest()
+        if sha not in seen_sha:
+            seen_sha.add(sha)
+            ext = _COMMON_EXTS.get(mediatype) or mimetypes.guess_extension(mediatype) or ".bin"
+            name = f"inline-{sha[:8]}{ext}"
+            new_atts.append(ParsedAttachment(
+                filename=name,
+                filename_raw=name,
+                content_type=mediatype,
+                content_id=None,
+                is_inline=True,
+                referenced_in_html=True,
+                size=len(payload),
+                sha256=sha,
+                payload=payload,
+                part_index=-1,
+            ))
+
+        return f"src={q}{q}"
+
+    cleaned = _DATA_URI_SRC_RE.sub(_replace, html)
+    return cleaned, new_atts
 
 
 # ---------------------------------------------------------------------------

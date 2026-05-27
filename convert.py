@@ -24,7 +24,7 @@ from zkm.inbox import build_canonical_index, symlink_with_sidecar
 from zkm.hashing import git_blob_hash_bytes
 from zkm_eml.originals import detect_git_object_format, find_git_root, git_head, resolve_source_meta, write_original
 from zkm_eml.parse import parse_eml
-from zkm_eml.render import ParentInfo, html_to_markdown, render_body, split_body_sections
+from zkm_eml.render import ParentInfo, detach_html_data_uris, html_to_markdown, render_body, split_body_sections
 from zkm_eml.source import default_exclude_folders, iter_messages, iter_messages_since
 from zkm_eml.state import get_last_commit, set_last_commit
 from zkm_eml.thread_index import ThreadMember, build_thread_membership, write_thread_index
@@ -99,6 +99,14 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                 if progress:
                     progress(i, total, eml_path.name)
                 continue
+
+            # Detach inline data-URI images from HTML body before CAS storage
+            if msg.html_body:
+                cleaned_html, inline_atts = detach_html_data_uris(msg.html_body)
+                if inline_atts:
+                    msg.html_body = cleaned_html
+                    msg.attachments.extend(inline_atts)
+                    msg.has_attachments = True
 
             tid = thread_id_for(msg.message_id, msg.references)
             t8 = thread_stub(tid)
@@ -209,6 +217,13 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
     if _src_repo and source_repo_commit:
         set_last_commit(store_path, _src_repo, source_repo_commit)
 
+    # M3: handle source-mail deletions (git-backed sources + fast-path only)
+    deleted_policy = str(config.get("deleted_policy", "keep")).strip().lower()
+    if deleted_policy != "keep" and _fast_path_used and _src_repo and _since and source_repo_commit:
+        _deleted = _get_deleted_blobs(_src_repo, _since, source_repo_commit)
+        if _deleted:
+            _apply_deleted_policy(store_path, messages_dir, _deleted, deleted_policy)
+
     return created
 
 
@@ -313,6 +328,103 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
 # ---------------------------------------------------------------------------
 # Parent lookup factory for quote stripping
 # ---------------------------------------------------------------------------
+
+def _get_deleted_blobs(src_repo: Path, since: str, until: str) -> list[tuple[str, str]]:
+    """Return (blob_sha, repo-relative-path) for files deleted between *since* and *until*.
+
+    Uses ``git diff --raw --diff-filter=D`` which gives the old blob SHA in column 3
+    of the raw diff header line, regardless of whether the repo uses SHA-1 or SHA-256.
+    Returns [] on any error.
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--raw", "--no-abbrev", "--diff-filter=D", since, until],
+            cwd=str(src_repo),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except Exception:
+        return []
+    if result.returncode != 0:
+        return []
+    pairs: list[tuple[str, str]] = []
+    for line in result.stdout.splitlines():
+        if not line.startswith(":"):
+            continue
+        try:
+            meta_part, path = line.split("\t", 1)
+        except ValueError:
+            continue
+        fields = meta_part.split()
+        if len(fields) < 3:
+            continue
+        pairs.append((fields[2], path))
+    return pairs
+
+
+def _build_source_blob_index(messages_dir: Path) -> dict[str, Path]:
+    """Scan all .md files under *messages_dir* and return {source_blob: md_path}."""
+    import frontmatter as fm  # lazy import — only on deletion
+    index: dict[str, Path] = {}
+    for md_path in messages_dir.rglob("*.md"):
+        try:
+            post = fm.load(md_path)
+            blob = post.metadata.get("source_blob")
+            if blob:
+                index[str(blob)] = md_path
+        except Exception:
+            pass
+    return index
+
+
+def _mark_source_deleted(md_path: Path) -> None:
+    """Insert ``source_deleted: true`` into the YAML frontmatter block in-place."""
+    import re
+    text = md_path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return
+    new_text = re.sub(r"\n---\n", "\nsource_deleted: true\n---\n", text, count=1)
+    if new_text == text:
+        return
+    from zkm.atomic import write_atomic
+    write_atomic(md_path, new_text)
+
+
+def _apply_deleted_policy(
+    store_path: Path,
+    messages_dir: Path,
+    deleted_blobs: list[tuple[str, str]],
+    policy: str,
+) -> int:
+    """Apply *policy* to .md files whose source blob was deleted. Returns count of affected files."""
+    if not deleted_blobs:
+        return 0
+    blob_index = _build_source_blob_index(messages_dir)
+    count = 0
+    for blob_sha, src_rel in deleted_blobs:
+        md_path = blob_index.get(blob_sha)
+        if md_path is None or not md_path.exists():
+            continue
+        rel = md_path.relative_to(store_path)
+        if policy == "log":
+            print(f"INFO: source deleted: {src_rel} → {rel}", file=sys.stderr)
+        elif policy == "purge":
+            md_path.unlink()
+            print(
+                f"INFO: purged (source deleted): {rel}"
+                " — run 'zkm gc' to clean originals",
+                file=sys.stderr,
+            )
+        elif policy == "archive":
+            _mark_source_deleted(md_path)
+            print(f"INFO: archived (source_deleted=true): {rel}", file=sys.stderr)
+        else:
+            continue
+        count += 1
+    return count
+
 
 def _make_parent_lookup(
     store_path: Path,

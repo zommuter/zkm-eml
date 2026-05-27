@@ -48,9 +48,9 @@ def test_inline_image_detected():
 
 def test_cas_object_written(store: Path):
     config = {
-        "EML_SOURCE_DIR": str(FIXTURES),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "true",
+        "source_dir": str(FIXTURES),
+        "keep_originals": True,
+        "attachment_inbox": True,
     }
     convert(store, config)
 
@@ -78,9 +78,9 @@ def test_cas_deduplication(store: Path):
     shutil.copy(FIXTURES / "with_pdf_forwarded.eml", src / "with_pdf_forwarded.eml")
 
     config = {
-        "EML_SOURCE_DIR": str(src),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "true",
+        "source_dir": str(src),
+        "keep_originals": True,
+        "attachment_inbox": True,
     }
     convert(store, config)
 
@@ -92,9 +92,9 @@ def test_cas_deduplication(store: Path):
 
 def test_per_message_symlinks(store: Path):
     config = {
-        "EML_SOURCE_DIR": str(FIXTURES),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "false",
+        "source_dir": str(FIXTURES),
+        "keep_originals": True,
+        "attachment_inbox": False,
     }
     convert(store, config)
 
@@ -109,9 +109,9 @@ def test_per_message_symlinks(store: Path):
 
 def test_inbox_symlinks_created(store: Path):
     config = {
-        "EML_SOURCE_DIR": str(FIXTURES),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "true",
+        "source_dir": str(FIXTURES),
+        "keep_originals": True,
+        "attachment_inbox": True,
     }
     convert(store, config)
 
@@ -135,9 +135,9 @@ def test_inbox_dedup(store: Path):
     shutil.copy(FIXTURES / "with_pdf_forwarded.eml", src / "with_pdf_forwarded.eml")
 
     config = {
-        "EML_SOURCE_DIR": str(src),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "true",
+        "source_dir": str(src),
+        "keep_originals": True,
+        "attachment_inbox": True,
     }
     convert(store, config)
 
@@ -149,9 +149,9 @@ def test_inbox_dedup(store: Path):
 
 def test_frontmatter_attachments_field(store: Path):
     config = {
-        "EML_SOURCE_DIR": str(FIXTURES),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "false",
+        "source_dir": str(FIXTURES),
+        "keep_originals": True,
+        "attachment_inbox": False,
     }
     convert(store, config)
 
@@ -183,9 +183,9 @@ def test_stripped_eml_has_stub_headers(store: Path):
     shutil.copy(FIXTURES / "with_pdf.eml", src / "with_pdf.eml")
 
     config = {
-        "EML_SOURCE_DIR": str(src),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "false",
+        "source_dir": str(src),
+        "keep_originals": True,
+        "attachment_inbox": False,
     }
     convert(store, config)
 
@@ -206,9 +206,9 @@ def test_inbox_sidecar_single_producer(store: Path):
     shutil.copy(FIXTURES / "with_pdf.eml", src / "with_pdf.eml")
 
     config = {
-        "EML_SOURCE_DIR": str(src),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "true",
+        "source_dir": str(src),
+        "keep_originals": True,
+        "attachment_inbox": True,
     }
     convert(store, config)
 
@@ -240,9 +240,9 @@ def test_inbox_sidecar_multi_producer(store: Path):
     shutil.copy(FIXTURES / "with_pdf_forwarded.eml", src / "with_pdf_forwarded.eml")
 
     config = {
-        "EML_SOURCE_DIR": str(src),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "true",
+        "source_dir": str(src),
+        "keep_originals": True,
+        "attachment_inbox": True,
     }
     convert(store, config)
 
@@ -273,9 +273,9 @@ def test_inbox_sidecar_idempotent(store: Path):
     shutil.copy(FIXTURES / "with_pdf.eml", src / "with_pdf.eml")
 
     config = {
-        "EML_SOURCE_DIR": str(src),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "true",
+        "source_dir": str(src),
+        "keep_originals": True,
+        "attachment_inbox": True,
     }
     convert(store, config)
     convert(store, config)  # second run: message already seen, no new symlinks
@@ -290,9 +290,9 @@ def test_inbox_sidecar_idempotent(store: Path):
 
 def test_idempotent_with_attachments(store: Path):
     config = {
-        "EML_SOURCE_DIR": str(FIXTURES),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "true",
+        "source_dir": str(FIXTURES),
+        "keep_originals": True,
+        "attachment_inbox": True,
     }
     first = convert(store, config)
     second = convert(store, config)
@@ -313,9 +313,9 @@ def test_per_message_attachment_sidecar_written(store: Path):
     shutil.copy(FIXTURES / "with_pdf.eml", src / "with_pdf.eml")
 
     config = {
-        "EML_SOURCE_DIR": str(src),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "false",
+        "source_dir": str(src),
+        "keep_originals": True,
+        "attachment_inbox": False,
     }
     convert(store, config)
 
@@ -340,9 +340,9 @@ def test_cas_object_sidecar_single_producer(store: Path):
     shutil.copy(FIXTURES / "with_pdf.eml", src / "with_pdf.eml")
 
     config = {
-        "EML_SOURCE_DIR": str(src),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "false",
+        "source_dir": str(src),
+        "keep_originals": True,
+        "attachment_inbox": False,
     }
     convert(store, config)
 
@@ -369,9 +369,9 @@ def test_cas_object_sidecar_multi_producer(store: Path):
     shutil.copy(FIXTURES / "with_pdf_forwarded.eml", src / "with_pdf_forwarded.eml")
 
     config = {
-        "EML_SOURCE_DIR": str(src),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "false",
+        "source_dir": str(src),
+        "keep_originals": True,
+        "attachment_inbox": False,
     }
     convert(store, config)
 
@@ -393,9 +393,9 @@ def test_cas_object_sidecar_idempotent(store: Path):
     shutil.copy(FIXTURES / "with_pdf.eml", src / "with_pdf.eml")
 
     config = {
-        "EML_SOURCE_DIR": str(src),
-        "EML_KEEP_ORIGINALS": "true",
-        "EML_ATTACHMENT_INBOX": "false",
+        "source_dir": str(src),
+        "keep_originals": True,
+        "attachment_inbox": False,
     }
     convert(store, config)
     convert(store, config)  # second run: message already seen
@@ -405,4 +405,45 @@ def test_cas_object_sidecar_idempotent(store: Path):
     assert len(json_sidecars) == 1
     data = json.loads(json_sidecars[0].read_text(encoding="utf-8"))
     assert len(data["producers"]) == 1  # not doubled
+
+
+def test_data_uri_img_detached_to_cas(store: Path):
+    """HTML email with inline data-URI image: CAS object written, body is clean."""
+    import shutil
+    src = store.parent / "eml_src"
+    src.mkdir()
+    shutil.copy(FIXTURES / "with_data_uri_img.eml", src / "with_data_uri_img.eml")
+
+    config = {
+        "source_dir": str(src),
+        "keep_originals": True,
+        "attachment_inbox": False,
+    }
+    created = convert(store, config)
+    assert len(created) == 1
+
+    # Rendered markdown body must not contain any data: URI
+    post = frontmatter.load(created[0])
+    assert "data:" not in post.content, "data-URI leaked into markdown body"
+
+    # At least one CAS object created for the detached image
+    objects_dir = store / "mail" / "_objects"
+    cas_files = [p for p in objects_dir.rglob("*") if p.is_file() and "." not in p.name]
+    assert len(cas_files) >= 1
+
+    # Frontmatter attachments entry present with is_inline=True
+    atts = post.metadata.get("attachments", [])
+    assert len(atts) >= 1
+    inline = [a for a in atts if a.get("inline")]
+    assert len(inline) >= 1
+    att = inline[0]
+    assert att["filename"].startswith("inline-")
+    assert att["filename"].endswith(".png")
+    assert len(att["sha256"]) == 64
+
+    # CAS object sha256 matches the filename
+    for cas_file in cas_files:
+        expected_sha = cas_file.parent.name + cas_file.name
+        actual_sha = hashlib.sha256(cas_file.read_bytes()).hexdigest()
+        assert actual_sha == expected_sha
 
