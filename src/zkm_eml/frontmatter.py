@@ -10,7 +10,7 @@ import frontmatter
 from .parse import ParsedAttachment, ParsedMessage
 
 PLUGIN_NAME = "eml"
-PLUGIN_VERSION = "0.10.0"
+PLUGIN_VERSION = "0.11.0"
 
 
 def write_message_md(

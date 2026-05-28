@@ -5,6 +5,7 @@ Plugin entry point. See CLAUDE.md for architecture notes.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -484,3 +485,72 @@ def _make_parent_lookup(
         return info
 
     return lookup
+
+
+# Base64 content fragment: 40+ chars of pure base64 alphabet (no spaces, no hyphens).
+# These leak into entities[] when NER processes emails whose HTML bodies contained
+# inline data-URI images (fixed in v0.10.0 via CAS detach).  Anything matching this
+# pattern is definitionally noise — no legitimate entity value is a raw base64 blob.
+_BASE64_FRAGMENT_RE = re.compile(r"^[A-Za-z0-9+/=]{40,}$")
+
+
+def scrub(
+    store_path: Path,
+    config: dict,
+    *,
+    dry_run: bool = True,
+    verbose: bool = False,
+    progress=None,
+) -> dict[str, int]:
+    """Remove base64-fragment garbage from entities[] in mail/messages files.
+
+    These entries were written by the NER amender on emails whose HTML bodies
+    contained inline data-URI images (before the v0.10.0 CAS-detach fix).
+    Set-union amendment merge cannot remove them; this scrub pass does.
+    """
+    import frontmatter as fm
+    from zkm.atomic import write_atomic
+
+    messages_dir = store_path / "mail" / "messages"
+    if not messages_dir.exists():
+        return {"files_scanned": 0, "files_changed": 0, "entities_removed": 0}
+
+    files_scanned = files_changed = entities_removed = 0
+
+    md_files = sorted(
+        p for p in messages_dir.rglob("*.md")
+        if not any(part.startswith(".") for part in p.relative_to(store_path).parts[:-1])
+    )
+    total = len(md_files)
+
+    for i, md_path in enumerate(md_files):
+        if progress is not None:
+            progress(i, total, str(md_path.relative_to(store_path)))
+
+        try:
+            post = fm.load(str(md_path))
+        except Exception:
+            continue
+
+        files_scanned += 1
+        entities = post.metadata.get("entities") or []
+        clean = [e for e in entities if not _BASE64_FRAGMENT_RE.match(str(e.get("value", "")))]
+        removed = len(entities) - len(clean)
+
+        if removed:
+            if verbose:
+                print(f"  {md_path.relative_to(store_path)}: -{removed} entity fragments")
+            if not dry_run:
+                post.metadata["entities"] = clean
+                write_atomic(md_path, fm.dumps(post))
+            entities_removed += removed
+            files_changed += 1
+
+    if progress is not None:
+        progress(total, total, "done")
+
+    return {
+        "files_scanned": files_scanned,
+        "files_changed": files_changed,
+        "entities_removed": entities_removed,
+    }

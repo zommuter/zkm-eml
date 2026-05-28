@@ -8,7 +8,7 @@ from pathlib import Path
 import frontmatter
 import pytest
 
-from convert import convert, reprocess
+from convert import convert, reprocess, scrub
 from zkm_eml.parse import parse_eml
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -36,7 +36,7 @@ def test_convert_basic(store: Path):
         assert "thread_id" in post.metadata
         assert "thread" in post.metadata
         assert "processor" in post.metadata
-        assert post.metadata["processor_version"] == "0.10.0"
+        assert post.metadata["processor_version"] == "0.11.0"
 
 
 def test_convert_idempotent(store: Path):
@@ -542,3 +542,39 @@ def test_deleted_policy_archive(tmp_path: Path) -> None:
     assert md.exists()
     post = frontmatter.load(md)
     assert post.metadata.get("source_deleted") is True
+
+
+def test_scrub_removes_base64_garbage(tmp_path: Path) -> None:
+    """scrub() removes base64-fragment entity values, leaves legitimate values."""
+    sdir = tmp_path / "store"
+    (sdir / "mail" / "messages" / "2020" / "04").mkdir(parents=True)
+
+    b64 = "UdAgC798dF1Y4PdWGsEorIPwmXFXPh5clhjWKPpPdtUmQbh0qOOfx8eWsvLp"
+    legit = "test@example.com"
+    md_path = sdir / "mail" / "messages" / "2020" / "04" / "test.md"
+    md_path.write_text(
+        f"---\nsource: eml\nentities:\n"
+        f"  - {{type: email_address, value: '{legit}'}}\n"
+        f"  - {{type: person, value: '{b64}'}}\n"
+        f"---\nbody\n"
+    )
+
+    # Dry run: no changes written
+    stats = scrub(sdir, {}, dry_run=True)
+    assert stats["files_changed"] == 1
+    assert stats["entities_removed"] == 1
+    post = frontmatter.load(str(md_path))
+    assert len(post.metadata["entities"]) == 2  # unchanged
+
+    # Apply
+    stats = scrub(sdir, {}, dry_run=False)
+    assert stats["files_changed"] == 1
+    assert stats["entities_removed"] == 1
+    post = frontmatter.load(str(md_path))
+    assert len(post.metadata["entities"]) == 1
+    assert post.metadata["entities"][0]["value"] == legit
+
+    # Idempotent
+    stats = scrub(sdir, {}, dry_run=False)
+    assert stats["files_changed"] == 0
+    assert stats["entities_removed"] == 0
