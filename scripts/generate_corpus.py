@@ -113,6 +113,33 @@ MESSAGES: list[tuple[str, str]] = [
         "\r\n"
         "Frank\r\n",
     ),
+    (
+        # NER probe fixture: body has spaced IBAN + CHF amount.
+        # compact canonical DE44500105175407324931 is absent from body,
+        # so BM25 can only match it via entities[].canonical (E8 regression).
+        "corpus_iban_invoice.eml",
+        "From: Alice <alice@example.com>\r\n"
+        "To: Bob <bob@example.com>\r\n"
+        "Subject: Payment request with IBAN\r\n"
+        "Date: Thu, 09 Apr 2026 11:00:00 +0000\r\n"
+        "Message-ID: <corpus-iban-invoice@example.com>\r\n"
+        "MIME-Version: 1.0\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "\r\n"
+        "Dear Bob,\r\n"
+        "\r\n"
+        "Please transfer the outstanding amount for the March invoice.\r\n"
+        "\r\n"
+        "Amount due: CHF 1250\r\n"
+        "Bank: Deutsche Bank AG\r\n"
+        "IBAN: DE44 5001 0517 5407 3249 31\r\n"
+        "BIC: DEUTDEDB\r\n"
+        "\r\n"
+        "Payment is requested within 14 days.\r\n"
+        "\r\n"
+        "Best regards,\r\n"
+        "Alice\r\n",
+    ),
 ]
 
 

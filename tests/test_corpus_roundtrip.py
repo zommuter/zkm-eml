@@ -64,7 +64,7 @@ def test_convert_subject_not_title(store: Path) -> None:
         "keep_originals": False,
         "quote_strip": False,
     })
-    assert len(created) == 5
+    assert len(created) == 6
     for p in created:
         post = frontmatter.load(p)
         assert "subject" in post.metadata, f"{p.name}: missing 'subject' key"
@@ -94,6 +94,7 @@ def test_convert_frontmatter_schema(store: Path) -> None:
         "<corpus-thread-reply1@example.org>",
         "<corpus-thread-reply2@example.org>",
         "<corpus-multi-addr@example.net>",
+        "<corpus-iban-invoice@example.com>",
     }
 
     # All messages: required schema fields
@@ -150,6 +151,18 @@ def test_convert_frontmatter_schema(store: Path) -> None:
     assert addrs == {
         "frank@example.net", "alice@example.com", "bob@example.com", "carol@example.org"
     }
+
+    # NER probe fixture — body has spaced IBAN + CHF amount (entities[] added by NER amender)
+    iban_post = by_mid["<corpus-iban-invoice@example.com>"]
+    iban_inv = iban_post.metadata
+    assert iban_inv["subject"] == "Payment request with IBAN"
+    assert iban_inv["date"] == "2026-04-09T11:00:00+00:00"
+    addrs = {p["address"] for p in iban_inv["participants"]}
+    assert addrs == {"alice@example.com", "bob@example.com"}
+    # Spaced IBAN in body; compact canonical absent — canonical-only BM25 search
+    # can only match via entities[].canonical (tested in core test_entity_search.py)
+    assert "DE44 5001 0517 5407 3249 31" in iban_post.content
+    assert "DE44500105175407324931" not in iban_post.content
 
 
 def test_convert_thread_ids_consistent(store: Path) -> None:

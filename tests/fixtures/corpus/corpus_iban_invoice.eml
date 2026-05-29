@@ -1,0 +1,21 @@
+From: Alice <alice@example.com>
+To: Bob <bob@example.com>
+Subject: Payment request with IBAN
+Date: Thu, 09 Apr 2026 11:00:00 +0000
+Message-ID: <corpus-iban-invoice@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Dear Bob,
+
+Please transfer the outstanding amount for the March invoice.
+
+Amount due: CHF 1250
+Bank: Deutsche Bank AG
+IBAN: DE44 5001 0517 5407 3249 31
+BIC: DEUTDEDB
+
+Payment is requested within 14 days.
+
+Best regards,
+Alice
