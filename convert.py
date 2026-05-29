@@ -493,16 +493,24 @@ def _make_parent_lookup(
 # pattern is definitionally noise — no legitimate entity value is a raw base64 blob.
 _BASE64_FRAGMENT_RE = re.compile(r"^[A-Za-z0-9+/=]{40,}$")
 
-# HTML entity run: 2+ consecutive HTML entity references (e.g. &gt;&nbsp;, &gt; &gt;).
-# These leak when html_to_markdown() leaves HTML entities undecoded before NER processes
-# the body; the quoted-reply > markers arrive as &gt; runs tagged as type `org`.
-_HTML_ENTITY_RUN_RE = re.compile(
-    r"^[\s]*(&(?:[a-zA-Z]+|#\d+|#x[0-9a-fA-F]+);[\s]*){2,}$"
-)
-
-
 def _is_scrub_garbage(value: str) -> bool:
-    return bool(_BASE64_FRAGMENT_RE.match(value) or _HTML_ENTITY_RUN_RE.match(value))
+    """Detect NER entity values that are undecoded-HTML body noise, not real entities.
+
+    Three signals for HTML-entity garbage (from pre-v0.12.0 undecoded &gt;/&nbsp;):
+      - Starts with &gt; → quoted-reply line leaked as entity (e.g. '&gt;&nbsp;Hi Paul')
+      - Contains 3+ &nbsp; → body text where spaces were encoded (high-density indicates
+        a full sentence extracted from the undecoded HTML body, not a named entity)
+      - Contains \\n&gt → text bleeds into quoted-reply marker (e.g. 'Paul\\n&gt')
+    """
+    if _BASE64_FRAGMENT_RE.match(value):
+        return True
+    if value.startswith("&gt;"):
+        return True
+    if value.count("&nbsp;") >= 3:
+        return True
+    if "\n&gt" in value:
+        return True
+    return False
 
 
 def scrub(

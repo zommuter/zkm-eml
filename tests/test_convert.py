@@ -581,22 +581,28 @@ def test_scrub_removes_base64_garbage(tmp_path: Path) -> None:
 
 
 def test_scrub_removes_html_entity_run_garbage(tmp_path: Path) -> None:
-    """scrub() removes &gt;&nbsp; quoted-reply garbage entities, keeps legitimate values."""
+    """scrub() removes &gt;/&nbsp; quoted-reply garbage entities, keeps legitimate values."""
     sdir = tmp_path / "store"
     (sdir / "mail" / "messages").mkdir(parents=True)
 
     legit = "Google LLC"
     md_path = sdir / "mail" / "messages" / "test.md"
+    # Values: 1 legit + 5 garbage covering the three detection signals
     md_path.write_text(
-        f"---\nsource: eml\nentities:\n"
+        "---\nsource: eml\nentities:\n"
         f"  - {{type: org, value: '{legit}'}}\n"
-        f"  - {{type: org, value: '&gt;&nbsp;&gt;&nbsp;'}}\n"
-        f"  - {{type: org, value: '&gt; &gt; &gt;'}}\n"
-        f"---\nbody\n"
+        # starts-with &gt; (quoted-reply line)
+        "  - {type: org, value: '&gt;&nbsp;Hi Paul'}\n"
+        "  - {type: org, value: '&gt; &gt; Best regards'}\n"
+        # 3+ &nbsp; (full sentence from undecoded body)
+        "  - {type: org, value: 'Please&nbsp;let&nbsp;me&nbsp;know&nbsp;when'}\n"
+        # \n&gt (text bleeding into reply marker)
+        "  - {type: person, value: \"Paul\\n&gt\"}\n"
+        "---\nbody\n"
     )
 
     stats = scrub(sdir, {}, dry_run=False)
-    assert stats["entities_removed"] == 2
+    assert stats["entities_removed"] == 4
     post = frontmatter.load(str(md_path))
     assert len(post.metadata["entities"]) == 1
     assert post.metadata["entities"][0]["value"] == legit
