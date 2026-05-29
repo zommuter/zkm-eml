@@ -229,11 +229,15 @@ def _resolve_parent(
 
 
 def _html_to_markdown(html: str) -> str:
+    import html as _html_mod
+    # Decode HTML entities (&gt; → >, &nbsp; → space, etc.) before markdownify so
+    # quote_strip.find_tail_quote() sees real > chars and strips quoted tails correctly.
+    # Without this, quoted-reply markers survive into NER as garbage `org` entities.
+    decoded = _html_mod.unescape(html)
     try:
         from markdownify import markdownify
-        return markdownify(html, heading_style="ATX", bullets="-").strip()
+        return markdownify(decoded, heading_style="ATX", bullets="-").strip()
     except ImportError:
-        import re
-        text = re.sub(r"<[^>]+>", " ", html)
+        text = re.sub(r"<[^>]+>", " ", decoded)
         text = re.sub(r" {2,}", " ", text)
         return text.strip()

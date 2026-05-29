@@ -493,6 +493,17 @@ def _make_parent_lookup(
 # pattern is definitionally noise — no legitimate entity value is a raw base64 blob.
 _BASE64_FRAGMENT_RE = re.compile(r"^[A-Za-z0-9+/=]{40,}$")
 
+# HTML entity run: 2+ consecutive HTML entity references (e.g. &gt;&nbsp;, &gt; &gt;).
+# These leak when html_to_markdown() leaves HTML entities undecoded before NER processes
+# the body; the quoted-reply > markers arrive as &gt; runs tagged as type `org`.
+_HTML_ENTITY_RUN_RE = re.compile(
+    r"^[\s]*(&(?:[a-zA-Z]+|#\d+|#x[0-9a-fA-F]+);[\s]*){2,}$"
+)
+
+
+def _is_scrub_garbage(value: str) -> bool:
+    return bool(_BASE64_FRAGMENT_RE.match(value) or _HTML_ENTITY_RUN_RE.match(value))
+
 
 def scrub(
     store_path: Path,
@@ -502,10 +513,10 @@ def scrub(
     verbose: bool = False,
     progress=None,
 ) -> dict[str, int]:
-    """Remove base64-fragment garbage from entities[] in mail/messages files.
+    """Remove entity garbage from entities[] in mail/messages files.
 
-    These entries were written by the NER amender on emails whose HTML bodies
-    contained inline data-URI images (before the v0.10.0 CAS-detach fix).
+    Removes base64-fragment entries (from pre-v0.10.0 inline data-URI bodies) and
+    HTML-entity-run entries (from pre-v0.12.0 undecoded &gt;/&nbsp; in quoted replies).
     Set-union amendment merge cannot remove them; this scrub pass does.
     """
     import frontmatter as fm
@@ -534,7 +545,7 @@ def scrub(
 
         files_scanned += 1
         entities = post.metadata.get("entities") or []
-        clean = [e for e in entities if not _BASE64_FRAGMENT_RE.match(str(e.get("value", "")))]
+        clean = [e for e in entities if not _is_scrub_garbage(str(e.get("value", "")))]
         removed = len(entities) - len(clean)
 
         if removed:

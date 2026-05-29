@@ -288,3 +288,31 @@ def test_nested_chain_strip():
     assert "Thanks Alice" not in result_c
     # inner nested content gone too (whole tail replaced by one line)
     assert "Hi everyone," not in result_c
+
+
+# ---------------------------------------------------------------------------
+# html_to_markdown — HTML entity decoding ([8497])
+# ---------------------------------------------------------------------------
+
+def test_html_to_markdown_decodes_entities_for_quote_strip() -> None:
+    """&gt; chars must arrive as real > so find_tail_quote can detect them."""
+    from zkm_eml.render import html_to_markdown
+
+    html = (
+        "<p>Thanks!</p>"
+        "<p>&gt; On 2024-01-01 Alice wrote:</p>"
+        "<p>&gt;&nbsp;Hello</p>"
+    )
+    md = html_to_markdown(html)
+    # Real > markers must be present so quote_strip can operate
+    assert ">" in md
+
+
+def test_html_to_markdown_entity_run_no_longer_in_output() -> None:
+    """&gt;&nbsp; runs must not survive verbatim into the markdown body."""
+    from zkm_eml.render import html_to_markdown
+
+    html = "<p>&gt;&nbsp;&gt;&nbsp;quoted text</p>"
+    md = html_to_markdown(html)
+    assert "&gt;" not in md
+    assert "&nbsp;" not in md
