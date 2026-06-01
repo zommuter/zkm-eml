@@ -2,6 +2,10 @@ name: eml
 version: 0.11.0
 description: Convert Maildir or .eml files to markdown with thread modeling and attachment extraction.
 
+conformance:
+  config:
+    source_dir: tests/fixtures/corpus
+
 creates_dirs:
   - mail/messages
   - mail/threads
