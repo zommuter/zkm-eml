@@ -4,7 +4,7 @@ description: Convert Maildir or .eml files to markdown with thread modeling and 
 
 conformance:
   config:
-    source_dir: tests/fixtures/corpus
+    source_dir: fixtures/corpus
 
 creates_dirs:
   - mail/messages

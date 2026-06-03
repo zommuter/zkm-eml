@@ -1,0 +1,14 @@
+From: Frank <frank@example.net>
+To: Alice <alice@example.com>, Bob <bob@example.com>
+Cc: Carol <carol@example.org>
+Subject: Welcome to the team
+Date: Wed, 08 Apr 2026 08:00:00 +0000
+Message-ID: <corpus-multi-addr@example.net>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Hello everyone,
+
+Welcome aboard. Looking forward to working with you all.
+
+Frank

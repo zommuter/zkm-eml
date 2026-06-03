@@ -1,0 +1,15 @@
+From: Alice <alice@example.com>
+To: Bob <bob@example.com>
+Subject: Invoice for March services
+Date: Wed, 01 Apr 2026 09:00:00 +0000
+Message-ID: <corpus-standalone@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Dear Bob,
+
+Please find the invoice for March services totalling CHF 1250.
+Payment due within 30 days.
+
+Best regards,
+Alice
