@@ -15,7 +15,7 @@ from email.message import EmailMessage
 from email.utils import getaddresses, parsedate_to_datetime
 from pathlib import Path
 
-import ftfy
+from zkm.encoding import post_decode as _post_decode_shared
 from charset_normalizer import from_bytes as _cn_from_bytes
 
 def _magic_sniff(data: bytes, fallback_ct: str) -> str:
@@ -311,17 +311,7 @@ def _detect_decode(payload: bytes) -> str | None:
 
 
 def _post_decode(text: str) -> str:
-    """Strip BOM, repair mojibake with ftfy, NFC-normalize."""
-    text = text.lstrip("﻿")  # UTF-8/UTF-16 BOM
-    text = ftfy.fix_text(
-        text,
-        uncurl_quotes=False,
-        fix_line_breaks=False,
-        fix_latin_ligatures=False,
-        fix_character_width=False,
-        normalization="NFC",
-    )
-    return text
+    return _post_decode_shared(text)
 
 
 def _decode_part(part: EmailMessage) -> str:

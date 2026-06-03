@@ -521,10 +521,12 @@ wheels = [
 
 [[package]]
 name = "zkm"
-version = "0.10.1"
+version = "0.11.0"
 source = { editable = "../../" }
 dependencies = [
+    { name = "charset-normalizer" },
     { name = "click" },
+    { name = "ftfy" },
     { name = "httpx" },
     { name = "numpy" },
     { name = "python-frontmatter" },
@@ -535,7 +537,9 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "charset-normalizer", specifier = ">=3.3" },
     { name = "click", specifier = ">=8.1" },
+    { name = "ftfy", specifier = ">=6.2" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "python-frontmatter", specifier = ">=1.1" },
