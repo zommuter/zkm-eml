@@ -10,7 +10,7 @@ import frontmatter
 from .parse import ParsedAttachment, ParsedMessage
 
 PLUGIN_NAME = "eml"
-PLUGIN_VERSION = "0.11.0"
+PLUGIN_VERSION = "0.14.0"
 
 
 def write_message_md(
@@ -26,6 +26,8 @@ def write_message_md(
     source_blob: str | None = None,
     signature_block: str | None = None,
     salutation_block: str | None = None,
+    signed: str | None = None,
+    auth_results: list[dict] | None = None,
 ) -> None:
     """Write (or overwrite) the markdown file for one message."""
     meta: dict = {
@@ -63,6 +65,10 @@ def write_message_md(
         meta["signature_block"] = signature_block
     if salutation_block:
         meta["salutation_block"] = salutation_block
+    if signed:
+        meta["signed"] = signed
+    if auth_results:
+        meta["auth_results"] = auth_results
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     post = frontmatter.Post(body, **meta)

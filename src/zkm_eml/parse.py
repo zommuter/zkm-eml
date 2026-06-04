@@ -45,6 +45,7 @@ class ParsedAttachment:
     sha256: str                # sha256 of decoded payload
     payload: bytes             # decoded content
     part_index: int            # walk-order index for stub correlation
+    is_signature_part: bool = False  # PGP/MIME or S/MIME signature leaf — exclude from inbox fan-out
 
 
 @dataclass
@@ -66,6 +67,8 @@ class ParsedMessage:
     sha256: str              # sha256 of raw .eml bytes
     source_path: Path        # original file path
     attachments: list[ParsedAttachment] = field(default_factory=list)
+    signed: str | None = None       # "pgp-mime" | "smime" | None (Tier A)
+    auth_results: list[dict] = field(default_factory=list)  # Tier B parsed auth headers
 
 
 def parse_eml(path: Path) -> ParsedMessage:
@@ -93,12 +96,14 @@ def parse_eml(path: Path) -> ParsedMessage:
     cc_addrs = _format_addr_list(msg.get("Cc") or "")
     bcc_addrs = _format_addr_list(msg.get("Bcc") or "")
 
-    plain_body, html_body, attachments = _extract_parts(msg)
+    plain_body, html_body, attachments, signed = _extract_parts(msg)
     # Mark which attachments are referenced by the HTML body (inline decoration)
     for att in attachments:
         if att.content_id:
             cid_bare = att.content_id.strip("<>")
             att.referenced_in_html = cid_bare in html_body or f"cid:{cid_bare}" in html_body
+
+    auth_results = _parse_auth_headers(msg)
 
     return ParsedMessage(
         message_id=message_id,
@@ -118,6 +123,8 @@ def parse_eml(path: Path) -> ParsedMessage:
         sha256=sha,
         source_path=path,
         attachments=attachments,
+        signed=signed,
+        auth_results=auth_results,
     )
 
 
@@ -181,19 +188,39 @@ _MULTIPART_TYPES = frozenset({
     "multipart/encrypted",
 })
 
+# Maps signature leaf content-type → signed enum value
+_SIGNATURE_LEAF_TYPES: dict[str, str] = {
+    "application/pgp-signature": "pgp-mime",
+    "application/pkcs7-signature": "smime",
+    "application/x-pkcs7-signature": "smime",
+}
 
-def _extract_parts(msg: EmailMessage) -> tuple[str, str, list[ParsedAttachment]]:
-    """Return (plain_text, html_text, attachments)."""
+
+def _extract_parts(msg: EmailMessage) -> tuple[str, str, list[ParsedAttachment], str | None]:
+    """Return (plain_text, html_text, attachments, signed_type)."""
     plain_parts: list[str] = []
     html_parts: list[str] = []
     attachments: list[ParsedAttachment] = []
     seen_filenames: set[str] = set()
+    signed_type: str | None = None
 
     for idx, part in enumerate(msg.walk()):
         content_type = part.get_content_type()
         disposition = part.get_content_disposition() or ""
 
         if content_type in _MULTIPART_TYPES:
+            # Detect signed container by protocol parameter (more reliable than leaf type)
+            if content_type == "multipart/signed":
+                protocol_raw = part.get_param("protocol") or ""
+                # get_param may return (charset, language, value) for RFC 2231 encoded params
+                if isinstance(protocol_raw, tuple):
+                    protocol = (protocol_raw[2] or "").lower()
+                else:
+                    protocol = str(protocol_raw).lower()
+                if "pgp-signature" in protocol:
+                    signed_type = "pgp-mime"
+                elif "pkcs7-signature" in protocol or "smime" in protocol:
+                    signed_type = "smime"
             continue
 
         if content_type == "text/plain" and disposition != "attachment":
@@ -210,6 +237,11 @@ def _extract_parts(msg: EmailMessage) -> tuple[str, str, list[ParsedAttachment]]
                 continue
             if not raw_payload:
                 continue
+
+            # Detect signature leaf (fallback when protocol param was absent)
+            is_sig = content_type in _SIGNATURE_LEAF_TYPES
+            if is_sig and signed_type is None:
+                signed_type = _SIGNATURE_LEAF_TYPES[content_type]
 
             raw_filename_raw = part.get_filename() or ""
             raw_filename = _decode_header_str(raw_filename_raw)
@@ -241,11 +273,79 @@ def _extract_parts(msg: EmailMessage) -> tuple[str, str, list[ParsedAttachment]]
                 sha256=sha,
                 payload=raw_payload,
                 part_index=idx,
+                is_signature_part=is_sig,
             ))
 
     plain = "\n\n".join(plain_parts).strip()
     html = "\n\n".join(html_parts).strip()
-    return plain, html, attachments
+    return plain, html, attachments, signed_type
+
+
+def _parse_auth_results_value(header_val: str) -> dict | None:
+    """Parse one Authentication-Results header value into a structured dict."""
+    parts = [p.strip() for p in header_val.split(";")]
+    if not parts or not parts[0]:
+        return None
+    record: dict = {
+        "source": "Authentication-Results",
+        "verified_by": parts[0].strip(),
+    }
+    for token in parts[1:]:
+        token = token.strip()
+        if not token:
+            continue
+        m = re.match(r"(\w+)=(\w+)", token)
+        if m:
+            method = m.group(1).lower()
+            verdict = m.group(2).lower()
+            if method in ("dkim", "spf", "dmarc", "arc", "bimi"):
+                record[method] = verdict
+    return record
+
+
+def _parse_auth_headers(msg: EmailMessage) -> list[dict]:
+    """Extract structured auth records from Authentication-Results, DKIM-Signature, ARC-*, X-Pm-* headers."""
+    records: list[dict] = []
+
+    for val in msg.get_all("Authentication-Results") or []:
+        rec = _parse_auth_results_value(val)
+        if rec is not None:
+            records.append(rec)
+
+    for val in msg.get_all("ARC-Authentication-Results") or []:
+        # ARC headers begin with "i=N; authserv-id; ..."
+        stripped = re.sub(r"^i=\d+;\s*", "", val.strip())
+        arc_rec = _parse_auth_results_value(stripped)
+        if arc_rec is not None:
+            arc_rec["source"] = "ARC-Authentication-Results"
+            instance_m = re.match(r"i=(\d+)", val.strip())
+            if instance_m:
+                arc_rec["instance"] = int(instance_m.group(1))
+            records.append(arc_rec)
+
+    for val in msg.get_all("DKIM-Signature") or []:
+        dkim_rec: dict = {"source": "DKIM-Signature"}
+        for tag in val.split(";"):
+            tag = tag.strip()
+            if "=" not in tag:
+                continue
+            k, _, v = tag.partition("=")
+            k = k.strip().lower()
+            if k == "d":
+                dkim_rec["domain"] = v.strip()
+            elif k == "s":
+                dkim_rec["selector"] = v.strip()
+            elif k == "a":
+                dkim_rec["algorithm"] = v.strip()
+        if "domain" in dkim_rec or "selector" in dkim_rec:
+            records.append(dkim_rec)
+
+    # Proton-specific headers (X-Pm-*)
+    for header in ("X-Pm-Spamscore", "X-Pm-Message-Id", "X-Pm-Recipient-Authentication"):
+        for val in msg.get_all(header) or []:
+            records.append({"source": header, "value": val.strip()})
+
+    return records
 
 
 def _unique_filename(name: str, seen: set[str]) -> str:

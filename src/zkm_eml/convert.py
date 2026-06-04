@@ -152,6 +152,8 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                     att_YYYY, att_MM = date_shard(msg.date)
                     link_dir = store_path / "inbox" / "mail" / att_YYYY / att_MM
                     for att, _ in attachment_pairs:
+                        if att.is_signature_part:
+                            continue  # signature leaves are CAS-preserved but never fan-out to inbox
                         try:
                             symlink_with_sidecar(
                                 cas_object=write_object(store_path, "mail", att.payload),
@@ -179,6 +181,8 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                 source_blob=source_blob,
                 signature_block=signature_block,
                 salutation_block=salutation_block,
+                signed=msg.signed,
+                auth_results=msg.auth_results or None,
             )
 
             # Register in parent index so later messages in this run can look up this one
