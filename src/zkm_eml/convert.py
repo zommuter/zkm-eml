@@ -314,6 +314,7 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
                 source_path_rel_home=source_path_rel_home,
                 source_repo_commit=source_repo_commit,
                 source_blob=source_blob,
+                extra_meta=post.metadata,
             )
             updated.append(md_path)
             touched_threads.add(tid)
