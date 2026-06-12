@@ -21,8 +21,9 @@ to upstream) is checked by the orchestrator, not by you.
     (currently 0.14.0 vs 0.13.0 drift in both plugin.yaml copies). Recurrence is
     prevented by a test, so the next version bump fails CI if any copy is missed.
   - **Tests**: `tests/test_version_sync.py::test_root_plugin_yaml_version_matches_pyproject`,
-    `::test_packaged_plugin_yaml_version_matches_pyproject`,
-    `::test_frontmatter_plugin_version_matches_pyproject` (each `# roadmap:7674`) (currently RED)
+    `::test_packaged_plugin_yaml_version_matches_pyproject` (each `# roadmap:7674`)
+    (currently RED); `::test_frontmatter_plugin_version_matches_pyproject` is already
+    green (PLUGIN_VERSION happens to be in sync) and serves as the recurrence guard.
   - **Done-check**: `uv run pytest tests/test_version_sync.py`
   - **Context**: `pyproject.toml` + git tag are canonical (house rule: no version
     literals duplicated without a guard). Simplest fix: edit both plugin.yaml

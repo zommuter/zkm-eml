@@ -36,3 +36,23 @@ def test_thread_id_broken_references_falls_back_to_own_id():
     # If references is empty, own message_id determines the thread
     tid = thread_id_for("orphan@example.com", [])
     assert len(tid) == 16
+
+
+def test_thread_id_falls_back_to_in_reply_to():
+    # roadmap:f583 — some clients send In-Reply-To without References; the reply
+    # must join its parent's thread instead of starting a singleton.
+    tid_root = thread_id_for("root@example.com", [])
+    tid_reply = thread_id_for("reply@example.com", [], in_reply_to="root@example.com")
+    assert tid_reply == tid_root
+
+
+def test_references_still_win_over_in_reply_to():
+    # roadmap:f583 — when References is present, references[0] stays the root
+    # (stability for already-imported mail); in_reply_to is only a fallback.
+    tid_root = thread_id_for("root@example.com", [])
+    tid = thread_id_for(
+        "grandchild@example.com",
+        ["root@example.com", "child@example.com"],
+        in_reply_to="child@example.com",
+    )
+    assert tid == tid_root
