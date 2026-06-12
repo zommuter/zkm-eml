@@ -50,7 +50,7 @@ to upstream) is checked by the orchestrator, not by you.
     `convert.py` threads the `slug_ascii` config key — only the tests are stale.
     See REVIEW_ME.md for the rewrite-vs-delete judgment call.
 
-- [ ] Detach data-URI images on --reprocess [ROUTINE] <!-- id:9bf0 -->
+- [x] Detach data-URI images on --reprocess [ROUTINE] <!-- id:9bf0 -->
   - **Acceptance**: `reprocess()` applies the same data-URI detach as `convert()`:
     after `zkm convert eml --reprocess`, no `data:` URI appears in any rendered .md
     body, and the detached payloads exist as CAS objects. (Today reprocess re-parses
