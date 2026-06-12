@@ -101,7 +101,7 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                     msg.attachments.extend(inline_atts)
                     msg.has_attachments = True
 
-            tid = thread_id_for(msg.message_id, msg.references)
+            tid = thread_id_for(msg.message_id, msg.references, in_reply_to=msg.in_reply_to)
             t8 = thread_stub(tid)
             YYYY, MM = date_shard(msg.date)
 
@@ -271,7 +271,7 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
                     progress(i, total, md_path.name)
                 continue
 
-            tid = thread_id_for(msg.message_id, msg.references)
+            tid = thread_id_for(msg.message_id, msg.references, in_reply_to=msg.in_reply_to)
             t8 = thread_stub(tid)
 
             existing_members = thread_membership.get(tid, [])
