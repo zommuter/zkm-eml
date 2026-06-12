@@ -15,7 +15,7 @@ to upstream) is checked by the orchestrator, not by you.
 
 ## Items
 
-- [ ] Sync plugin version metadata and guard against drift [ROUTINE] <!-- id:7674 -->
+- [x] Sync plugin version metadata and guard against drift [ROUTINE] <!-- id:7674 -->
   - **Acceptance**: `plugin.yaml` (repo root), `src/zkm_eml/plugin.yaml`, and
     `frontmatter.PLUGIN_VERSION` all report the same version as `pyproject.toml`
     (currently 0.14.0 vs 0.13.0 drift in both plugin.yaml copies). Recurrence is
