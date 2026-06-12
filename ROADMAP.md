@@ -99,7 +99,7 @@ to upstream) is checked by the orchestrator, not by you.
     REVIEW_ME.md. thread_id stability for already-imported mail with References is
     unaffected (references[0] still wins).
 
-- [ ] Refresh README to the current config contract [ROUTINE] <!-- id:d206 -->
+- [x] Refresh README to the current config contract [ROUTINE] <!-- id:d206 -->
   - **Acceptance**: README.md no longer documents the retired `.env` / `EML_*`
     environment mechanism; it documents the `zkm-config.yaml` plugin-config keys
     (`source_dir`, `folders_exclude`, `keep_originals`, `attachment_inbox`,
