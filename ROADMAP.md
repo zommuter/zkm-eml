@@ -33,7 +33,7 @@ to upstream) is checked by the orchestrator, not by you.
     importing the package). This is metadata-only — do NOT bump the pyproject
     version for this item.
 
-- [ ] Make the test suite green from a fresh clone [ROUTINE] <!-- id:e14b -->
+- [x] Make the test suite green from a fresh clone [ROUTINE] <!-- id:e14b -->
   - **Acceptance**: `uv run pytest` passes in a pristine worktree. Two tests
     currently fail on fresh checkouts: (a) `test_tmp_always_skipped` writes into
     `tests/fixtures/maildir/account1/INBOX/tmp/` which git cannot track while empty
