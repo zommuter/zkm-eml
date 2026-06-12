@@ -606,3 +606,47 @@ def test_scrub_removes_html_entity_run_garbage(tmp_path: Path) -> None:
     post = frontmatter.load(str(md_path))
     assert len(post.metadata["entities"]) == 1
     assert post.metadata["entities"][0]["value"] == legit
+
+
+def test_convert_threads_reply_with_only_in_reply_to(store: Path, tmp_path: Path):
+    """A reply carrying In-Reply-To but no References must join its parent's
+    thread end-to-end (same thread_id frontmatter, shared thread index)."""
+    # roadmap:f583
+    src = tmp_path / "irt_src"
+    src.mkdir()
+    (src / "root.eml").write_text(
+        "Message-ID: <irt-root@example.com>\n"
+        "Subject: Placeholder topic\n"
+        "From: Erika Musterfrau <erika@example.com>\n"
+        "To: max@example.com\n"
+        "Date: Mon, 05 May 2025 10:00:00 +0000\n"
+        "\n"
+        "Root body.\n",
+        encoding="utf-8",
+    )
+    (src / "reply.eml").write_text(
+        "Message-ID: <irt-reply@example.com>\n"
+        "In-Reply-To: <irt-root@example.com>\n"
+        "Subject: Re: Placeholder topic\n"
+        "From: Max Mustermann <max@example.com>\n"
+        "To: erika@example.com\n"
+        "Date: Mon, 05 May 2025 11:00:00 +0000\n"
+        "\n"
+        "Reply body, no References header.\n",
+        encoding="utf-8",
+    )
+
+    config = {"source_dir": str(src), "keep_originals": False}
+    created = convert(store, config)
+    assert len(created) == 2
+
+    by_mid = {
+        frontmatter.load(p).metadata["message_id"]: frontmatter.load(p).metadata
+        for p in created
+    }
+    root_meta = by_mid["<irt-root@example.com>"]
+    reply_meta = by_mid["<irt-reply@example.com>"]
+    assert reply_meta["thread_id"] == root_meta["thread_id"], (
+        "In-Reply-To-only reply started its own thread"
+    )
+    assert reply_meta["thread"] == root_meta["thread"]

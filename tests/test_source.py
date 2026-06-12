@@ -29,6 +29,8 @@ def test_trash_included_when_no_exclusion():
 
 
 def test_tmp_always_skipped():
+    # roadmap:e14b — RED on fresh clones: the tmp/ fixture dir is empty, so git
+    # cannot track it; the test must create it before writing (see ROADMAP.md).
     # Write a file in tmp/ and confirm it is never yielded
     tmp_file = MAILDIR / "account1" / "INBOX" / "tmp" / "partial.msg"
     tmp_file.write_text("From: x\nSubject: y\n\nBody")

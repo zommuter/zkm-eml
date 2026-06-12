@@ -81,6 +81,9 @@ def test_slugify_keeps_unicode_by_default():
 
 
 def test_slugify_ascii_fold_when_env_set(monkeypatch):
+    # roadmap:e14b — RED: tests the retired EML_SLUG_ASCII env mechanism (removed
+    # in the M2 config migration). Rewrite to slugify(s, slug_ascii=True); see
+    # ROADMAP.md and REVIEW_ME.md.
     monkeypatch.setenv("EML_SLUG_ASCII", "true")
     # Reload naming module so the env var is picked up
     import zkm_eml.naming as naming_mod
