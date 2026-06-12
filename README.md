@@ -4,11 +4,11 @@
 
 ## What it does
 
-- Reads mail from `~/mail` by default (mbsync Maildir tree) or any directory you point at via `EML_SOURCE_DIR`
+- Reads mail from `~/mail` by default (mbsync Maildir tree) or any directory configured via `source_dir` in `zkm-config.yaml`
 - Handles both Maildir format (files in `cur/`/`new/` without `.eml` extension) and flat `.eml` dumps
 - Writes one `mail/messages/<date>_<slug>.md` per message with frontmatter per the [zkm messaging-spec](https://github.com/zommuter/zkm/blob/main/docs/messaging-spec.md)
 - Groups messages into threads via RFC 5322 `References` chains — one `mail/threads/<thread_id>.md` per thread, regenerated on every run
-- Collapses full tail-quote blocks into a single `> *[Quoted from: …]*` link — English and German attribution lines ("On … wrote:" / "Am … schrieb:") are detected and removed; interleaved replies and low-similarity quotes are left untouched (`EML_QUOTE_STRIP`)
+- Collapses full tail-quote blocks into a single `> *[Quoted from: …]*` link — English and German attribution lines ("On … wrote:" / "Am … schrieb:") are detected and removed; interleaved replies and low-similarity quotes are left untouched (configurable via `quote_strip`)
 - Stores stripped originals in `originals/mail/` (attachment payloads detached, stubs added) — raw bytes reproducible via `git cat-file blob <source_blob>`; body text is always preserved verbatim in the original for round-trip fidelity
 - Attachments go into a content-addressed store at `originals/mail/_objects/` (sha256-named, deduplicated) and are symlinked from `inbox/` for other zkm plugins to pick up
 - Deduplicates by `Message-ID` — re-running is safe and idempotent
@@ -58,24 +58,29 @@ The plugin is auto-discovered from that location — no `zkm plugin add` needed.
 
 ### 3. Configure (optional)
 
-Without any configuration the plugin runs against `~/mail` using built-in defaults. To override, add to `$ZKM_STORE/.env`:
+Without any configuration the plugin runs against `~/mail` using built-in defaults. To override, add a `plugins.eml:` section to `$ZKM_STORE/zkm-config.yaml`:
 
-```env
-# Optional — defaults to ~/mail
-EML_SOURCE_DIR=~/mail
+```yaml
+plugins:
+  eml:
+    # Optional — defaults to ~/mail
+    source_dir: ~/mail
 
-# Optional — comma-separated folder patterns to skip (case-insensitive)
-# EML_FOLDERS_EXCLUDE=Trash,Junk,Spam,Drafts
+    # Optional — list of folder name patterns to skip (case-insensitive, any path segment)
+    # folders_exclude: [Trash, Junk, Spam, Drafts]
 
-# Optional — set to your own addresses for direction detection
-EML_OWNER_ADDRESSES=you@example.com,you@work.example.com
+    # Optional — set false to skip stripped-original storage and attachment extraction
+    # keep_originals: true
+    # attachment_inbox: true
 
-# Optional — set false to skip attachment extraction / inbox symlinks
-# EML_KEEP_ORIGINALS=true
-# EML_ATTACHMENT_INBOX=true
+    # Optional — set false to keep raw quoted text (no tail-quote collapsing)
+    # quote_strip: true
 
-# Optional — set false to keep raw quoted text (no tail-quote collapsing)
-# EML_QUOTE_STRIP=true
+    # Optional — force ASCII-only slugs (strip accents/umlauts)
+    # slug_ascii: false
+
+    # Optional — what to do when a source mail is deleted between runs (git sources only)
+    # deleted_policy: keep  # keep | log | purge | archive
 ```
 
 ### 4. Convert
@@ -86,22 +91,23 @@ zkm convert eml
 
 ## Store layout
 
+Messages and threads are sharded by year and month:
+
 ```
 $ZKM_STORE/
 ├── mail/
-│   ├── messages/2026-04-13_invoice-from-acme.md   # one per message
-│   └── threads/a1b2c3d4.md                         # one per thread
-├── originals/mail/
-│   ├── 2026-04-13_invoice-from-acme.eml            # stripped (no attachment payloads)
-│   ├── 2026-04-13_invoice-from-acme.source.json    # reconstruction hints
-│   ├── 2026-04-13_invoice-from-acme/
-│   │   ├── invoice.pdf                             # symlink → _objects/9f/2a3b...
-│   │   └── acme-logo.png                           # symlink → _objects/de/adbeef...
+│   ├── messages/2026/04/2026-04-13-1230-a1b2c3d4-invoice-from-acme.md  # one per message
+│   ├── threads/2026/04/2026-04-13-a1b2c3d4-invoice-thread.md            # one per thread
 │   └── _objects/
 │       ├── 9f/2a3b...c4d5                          # deduplicated CAS objects
 │       └── de/adbeef...
-└── inbox/
-    ├── invoice.pdf                                  # symlink → originals/mail/_objects/...
+├── originals/mail/2026/04/
+│   ├── 2026-04-13-1230-a1b2c3d4-invoice-from-acme.eml    # stripped (no attachment payloads)
+│   └── 2026-04-13-1230-a1b2c3d4-invoice-from-acme/
+│       ├── invoice.pdf                             # symlink → mail/_objects/9f/2a3b...
+│       └── acme-logo.png                           # symlink → mail/_objects/de/adbeef...
+└── inbox/mail/2026/04/
+    ├── invoice.pdf                                  # symlink → mail/_objects/...
     └── acme-logo.png                                # deduped — one link per unique payload
 ```
 

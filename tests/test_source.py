@@ -33,6 +33,7 @@ def test_tmp_always_skipped():
     # cannot track it; the test must create it before writing (see ROADMAP.md).
     # Write a file in tmp/ and confirm it is never yielded
     tmp_file = MAILDIR / "account1" / "INBOX" / "tmp" / "partial.msg"
+    tmp_file.parent.mkdir(parents=True, exist_ok=True)
     tmp_file.write_text("From: x\nSubject: y\n\nBody")
     try:
         msgs = list(iter_messages(MAILDIR, []))

@@ -15,7 +15,7 @@ to upstream) is checked by the orchestrator, not by you.
 
 ## Items
 
-- [ ] Sync plugin version metadata and guard against drift [ROUTINE] <!-- id:7674 -->
+- [x] Sync plugin version metadata and guard against drift [ROUTINE] <!-- id:7674 -->
   - **Acceptance**: `plugin.yaml` (repo root), `src/zkm_eml/plugin.yaml`, and
     `frontmatter.PLUGIN_VERSION` all report the same version as `pyproject.toml`
     (currently 0.14.0 vs 0.13.0 drift in both plugin.yaml copies). Recurrence is
@@ -33,7 +33,7 @@ to upstream) is checked by the orchestrator, not by you.
     importing the package). This is metadata-only — do NOT bump the pyproject
     version for this item.
 
-- [ ] Make the test suite green from a fresh clone [ROUTINE] <!-- id:e14b -->
+- [x] Make the test suite green from a fresh clone [ROUTINE] <!-- id:e14b -->
   - **Acceptance**: `uv run pytest` passes in a pristine worktree. Two tests
     currently fail on fresh checkouts: (a) `test_tmp_always_skipped` writes into
     `tests/fixtures/maildir/account1/INBOX/tmp/` which git cannot track while empty
@@ -50,7 +50,7 @@ to upstream) is checked by the orchestrator, not by you.
     `convert.py` threads the `slug_ascii` config key — only the tests are stale.
     See REVIEW_ME.md for the rewrite-vs-delete judgment call.
 
-- [ ] Detach data-URI images on --reprocess [ROUTINE] <!-- id:9bf0 -->
+- [x] Detach data-URI images on --reprocess [ROUTINE] <!-- id:9bf0 -->
   - **Acceptance**: `reprocess()` applies the same data-URI detach as `convert()`:
     after `zkm convert eml --reprocess`, no `data:` URI appears in any rendered .md
     body, and the detached payloads exist as CAS objects. (Today reprocess re-parses
@@ -65,7 +65,7 @@ to upstream) is checked by the orchestrator, not by you.
     re-writing the same object on reprocess is fine. Do not modify the stored
     original — it intentionally keeps body text verbatim (ARCHITECTURE.md §6, §7).
 
-- [ ] Preserve foreign frontmatter keys and attachments[] on --reprocess [ROUTINE] <!-- id:9255 -->
+- [x] Preserve foreign frontmatter keys and attachments[] on --reprocess [ROUTINE] <!-- id:9255 -->
   - **Acceptance**: reprocessing never loses (a) keys written by other producers
     (amenders: `entities`, `source_deleted`, …) or (b) the `attachments:` list that
     only the convert path can compute. Keys owned by the writer (body-derived:
@@ -81,7 +81,7 @@ to upstream) is checked by the orchestrator, not by you.
     multi-producer — see core `docs/` amendment notes. Judgment call recorded in
     REVIEW_ME.md.
 
-- [ ] Fall back to In-Reply-To for thread identity when References is empty [ROUTINE] <!-- id:f583 -->
+- [x] Fall back to In-Reply-To for thread identity when References is empty [ROUTINE] <!-- id:f583 -->
   - **Acceptance**: a reply that carries `In-Reply-To` but no `References` header
     (common for some webmail/mobile clients) lands in its parent's thread instead of
     starting a singleton thread, both at the unit level (`thread_id_for`) and through
@@ -99,7 +99,7 @@ to upstream) is checked by the orchestrator, not by you.
     REVIEW_ME.md. thread_id stability for already-imported mail with References is
     unaffected (references[0] still wins).
 
-- [ ] Refresh README to the current config contract [ROUTINE] <!-- id:d206 -->
+- [x] Refresh README to the current config contract [ROUTINE] <!-- id:d206 -->
   - **Acceptance**: README.md no longer documents the retired `.env` / `EML_*`
     environment mechanism; it documents the `zkm-config.yaml` plugin-config keys
     (`source_dir`, `folders_exclude`, `keep_originals`, `attachment_inbox`,

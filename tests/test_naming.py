@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 from datetime import datetime, timezone
 
 from zkm_eml.naming import date_shard, message_slug, slugify, thread_stub
@@ -80,20 +79,12 @@ def test_slugify_keeps_unicode_by_default():
     assert slugify("Grüße aus Berlin") == "grüße-aus-berlin"
 
 
-def test_slugify_ascii_fold_when_env_set(monkeypatch):
-    # roadmap:e14b — RED: tests the retired EML_SLUG_ASCII env mechanism (removed
-    # in the M2 config migration). Rewrite to slugify(s, slug_ascii=True); see
-    # ROADMAP.md and REVIEW_ME.md.
-    monkeypatch.setenv("EML_SLUG_ASCII", "true")
-    # Reload naming module so the env var is picked up
-    import zkm_eml.naming as naming_mod
-    importlib.reload(naming_mod)
-    try:
-        result = naming_mod.slugify("Grüße aus Berlin")
-        assert "ü" not in result
-        assert "ß" not in result
-        # NFKD: ü → u+combining-diaeresis → "u"; ß has no ASCII form → dropped
-        assert "grue" in result
-    finally:
-        monkeypatch.delenv("EML_SLUG_ASCII", raising=False)
-        importlib.reload(naming_mod)
+def test_slugify_ascii_fold_when_param_set():
+    # roadmap:e14b — rewritten: use current parameter contract slugify(s, slug_ascii=True)
+    # (no monkeypatch, no importlib.reload — the retired EML_SLUG_ASCII env mechanism
+    # was removed in the M2 config migration)
+    result = slugify("Grüße aus Berlin", slug_ascii=True)
+    assert "ü" not in result
+    assert "ß" not in result
+    # NFKD: ü → u+combining-diaeresis → "u"; ß has no ASCII form → dropped
+    assert "grue" in result

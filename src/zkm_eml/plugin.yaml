@@ -1,5 +1,5 @@
 name: eml
-version: 0.13.0
+version: 0.14.0
 description: Convert Maildir or .eml files to markdown with thread modeling and attachment extraction.
 
 conformance:

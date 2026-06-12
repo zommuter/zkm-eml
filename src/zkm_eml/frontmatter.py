@@ -13,6 +13,22 @@ PLUGIN_NAME = "eml"
 PLUGIN_VERSION = "0.14.0"
 
 
+# Keys produced by write_message_md from the message itself.
+# Any key NOT in this set is considered "foreign" (written by other producers
+# such as amenders) and must be preserved on reprocess.
+OWNED_KEYS: frozenset[str] = frozenset({
+    "source", "date", "tags", "sha256", "processor", "processor_version",
+    "message_id", "thread_id", "thread", "participants", "subject",
+    "in_reply_to", "references", "original", "source_path", "source_repo_commit",
+    "source_blob", "signature_block", "salutation_block",
+    "signed", "auth_results",
+    # NOTE: "attachments" is intentionally excluded — it is produced by the
+    # convert path but cannot be re-derived by reprocess (payload-stripped
+    # originals). extra_meta carries it forward; if attachment_meta is provided
+    # on the convert path, it overwrites via meta.update().
+})
+
+
 def write_message_md(
     dest: Path,
     msg: ParsedMessage,
@@ -28,8 +44,14 @@ def write_message_md(
     salutation_block: str | None = None,
     signed: str | None = None,
     auth_results: list[dict] | None = None,
+    extra_meta: dict | None = None,
 ) -> None:
-    """Write (or overwrite) the markdown file for one message."""
+    """Write (or overwrite) the markdown file for one message.
+
+    extra_meta: key/value pairs from a previous revision to carry forward.
+    Owned keys (OWNED_KEYS) take precedence; all other keys are merged in first
+    so that amender-written keys survive a reprocess rewrite.
+    """
     meta: dict = {
         "source": PLUGIN_NAME,
         "date": msg.date.isoformat(timespec="seconds"),
@@ -69,6 +91,11 @@ def write_message_md(
         meta["signed"] = signed
     if auth_results:
         meta["auth_results"] = auth_results
+
+    if extra_meta:
+        merged = {k: v for k, v in extra_meta.items() if k not in OWNED_KEYS}
+        merged.update(meta)
+        meta = merged
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     post = frontmatter.Post(body, **meta)

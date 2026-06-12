@@ -101,7 +101,7 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                     msg.attachments.extend(inline_atts)
                     msg.has_attachments = True
 
-            tid = thread_id_for(msg.message_id, msg.references)
+            tid = thread_id_for(msg.message_id, msg.references, in_reply_to=msg.in_reply_to)
             t8 = thread_stub(tid)
             YYYY, MM = date_shard(msg.date)
 
@@ -271,7 +271,20 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
                     progress(i, total, md_path.name)
                 continue
 
-            tid = thread_id_for(msg.message_id, msg.references)
+            # Detach inline data-URI images from HTML body (the stored original
+            # keeps them verbatim by design; re-apply the detach so they don't
+            # leak back into the rendered markdown). CAS writes are idempotent.
+            if msg.html_body:
+                cleaned_html, inline_atts = detach_html_data_uris(msg.html_body)
+                if inline_atts:
+                    msg.html_body = cleaned_html
+                    for att in inline_atts:
+                        try:
+                            write_object(store_path, "mail", att.payload)
+                        except Exception as e:
+                            print(f"WARN: CAS write failed for detached data-URI: {e}", file=sys.stderr)
+
+            tid = thread_id_for(msg.message_id, msg.references, in_reply_to=msg.in_reply_to)
             t8 = thread_stub(tid)
 
             existing_members = thread_membership.get(tid, [])
@@ -301,6 +314,7 @@ def reprocess(store_path: Path, config: dict, existing: list[Path], *, progress=
                 source_path_rel_home=source_path_rel_home,
                 source_repo_commit=source_repo_commit,
                 source_blob=source_blob,
+                extra_meta=post.metadata,
             )
             updated.append(md_path)
             touched_threads.add(tid)
