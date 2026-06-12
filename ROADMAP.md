@@ -65,7 +65,7 @@ to upstream) is checked by the orchestrator, not by you.
     re-writing the same object on reprocess is fine. Do not modify the stored
     original — it intentionally keeps body text verbatim (ARCHITECTURE.md §6, §7).
 
-- [ ] Preserve foreign frontmatter keys and attachments[] on --reprocess [ROUTINE] <!-- id:9255 -->
+- [x] Preserve foreign frontmatter keys and attachments[] on --reprocess [ROUTINE] <!-- id:9255 -->
   - **Acceptance**: reprocessing never loses (a) keys written by other producers
     (amenders: `entities`, `source_deleted`, …) or (b) the `attachments:` list that
     only the convert path can compute. Keys owned by the writer (body-derived:
