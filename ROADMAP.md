@@ -81,7 +81,7 @@ to upstream) is checked by the orchestrator, not by you.
     multi-producer — see core `docs/` amendment notes. Judgment call recorded in
     REVIEW_ME.md.
 
-- [ ] Fall back to In-Reply-To for thread identity when References is empty [ROUTINE] <!-- id:f583 -->
+- [x] Fall back to In-Reply-To for thread identity when References is empty [ROUTINE] <!-- id:f583 -->
   - **Acceptance**: a reply that carries `In-Reply-To` but no `References` header
     (common for some webmail/mobile clients) lands in its parent's thread instead of
     starting a singleton thread, both at the unit level (`thread_id_for`) and through
