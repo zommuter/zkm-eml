@@ -3,7 +3,7 @@
 Judgment calls encoded in red tests — confirm or correct the interpretation.
 Max ~10 open boxes; the reviewer prunes resolved ones each review turn.
 
-- [ ] tests/test_threading.py::test_thread_id_falls_back_to_in_reply_to (roadmap:f583)
+- [x] tests/test_threading.py::test_thread_id_falls_back_to_in_reply_to (roadmap:f583) — confirmed by user 2026-06-13 (batch triage)
   — interpretation: `in_reply_to` is a *fallback root* when References is empty. This
   only repairs one-hop breaks (reply-to-root); a deeper chain whose client strips
   References still splits. Also: In-Reply-To-only messages **already imported** keep
@@ -16,7 +16,7 @@ Max ~10 open boxes; the reviewer prunes resolved ones each review turn.
   coverage ("Grüße" → "grue..."). Alternative: delete the test (coverage loss) or
   reintroduce an env override (contradicts "replace means delete").
 
-- [ ] tests/test_reprocess.py::test_reprocess_detaches_data_uris (roadmap:9bf0) — fix
+- [x] tests/test_reprocess.py::test_reprocess_detaches_data_uris (roadmap:9bf0) — confirmed by user 2026-06-13 (batch triage) — fix
   is specced on the **reprocess path** (re-apply detach), NOT by stripping data-URIs
   out of the stored original .eml — the original's body stays verbatim per the
   round-trip guarantee (ARCHITECTURE.md §6/§7). Confirm that boundary.
