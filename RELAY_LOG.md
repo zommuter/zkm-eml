@@ -11,3 +11,7 @@ Handoff: CLAUDE.md de-staled (M2 config keys, sharded layout, PGP Tier A+B, dual
 ## 2026-06-12 23:43 — executor (sonnet, relay-loop)
 
 executor: all 6 ROUTINE items shipped (7674 e14b f583 9bf0 9255 d206)
+
+## 2026-06-13 15:01 — reviewer (claude-opus-4-8, fable-standin, relay-loop)
+
+review zkm-eml: audited 2cf87ce (docs-only owner decision) clean, 187 tests green, refreshed contract pointer v1→v2, pruned resolved 9255 REVIEW_ME box
