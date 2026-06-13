@@ -3,16 +3,6 @@
 Judgment calls encoded in red tests — confirm or correct the interpretation.
 Max ~10 open boxes; the reviewer prunes resolved ones each review turn.
 
-- [ ] tests/test_reprocess.py::test_reprocess_preserves_foreign_frontmatter_keys
-  (roadmap:9255) — `reprocess()` currently rewrites frontmatter from scratch, nuking
-  amender keys (`entities`, `source_deleted`). The test encodes: **carry over every
-  key the writer does not own**. Alternative reading: "reprocess invalidates
-  enrichment; re-run NER afterwards" — rejected because the amendment contract makes
-  frontmatter multi-producer and NER re-runs are expensive.
-  → owner 2026-06-13 CONFIRMED: carry over every key the writer does not own.
-  Multi-producer frontmatter is the right model — reprocess must not nuke
-  amender keys (`entities`, `source_deleted`). Sounds sensible.
-
 - [ ] tests/test_threading.py::test_thread_id_falls_back_to_in_reply_to (roadmap:f583)
   — interpretation: `in_reply_to` is a *fallback root* when References is empty. This
   only repairs one-hop breaks (reply-to-root); a deeper chain whose client strips
