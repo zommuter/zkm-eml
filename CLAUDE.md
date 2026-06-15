@@ -23,10 +23,10 @@ This repo is its own git repo (gitignored from the zkm parent). The editable
 `zkm = { path = "../../" }` dep means the checkout must sit under a zkm core tree
 (real `plugins/` dir or a host worktree) for `uv sync` to resolve.
 
-## Relay contract <!-- fables-executor contract v2 -->
+## Relay contract <!-- relay-executor contract v3 -->
 
-This repo is managed by a reviewer/executor relay. Load the `fables-executor` skill
-(`/fables-executor`) before working on any item, then follow its rules exactly.
+This repo is managed by a reviewer/executor relay. Load `/relay executor` before
+working on any item, then follow its rules exactly.
 
 ## Layout
 
