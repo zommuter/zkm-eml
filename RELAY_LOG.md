@@ -23,3 +23,7 @@ review 20260613-2304: 1 commit (REVIEW_ME batch-confirm) audited clean, 187 test
 ## 2026-06-15 11:24 — reviewer (claude-opus-4-8, fable-standin, relay-loop)
 
 reviewer (claude-opus-4-8, fable-standin, relay-loop): verified REVIEW_ME e14b/d206 confirm; suite 187 green, no gaming; refreshed stale relay-contract pointer v2→v3
+
+## 2026-06-16 10:23 — strong-execute (claude-opus-4-8, fable-standin, relay-loop)
+
+C5 ff0f: M1 attachment classification census mode (decoration|content|unknown in frontmatter+sidecars, decoration_fanout gate default-on), suite 200 green
