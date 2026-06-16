@@ -14,7 +14,7 @@ Max ~10 open boxes; the reviewer prunes resolved ones each review turn.
   note. If you want a "migrating from ≤v0.9" appendix mentioning the old names,
   loosen the test to scan only fenced config examples. — confirmed by user 2026-06-15 (review_me batch triage)
 
-- [ ] tests/test_classify.py (roadmap:ff0f) — M1 attachment classification thresholds
+- [x] tests/test_classify.py (roadmap:ff0f) — M1 attachment classification thresholds
   are HEURISTIC, not yet evidence-backed. The shipped interpretation (census mode):
   decoration = small (≤50 KB) inline cid-referenced image OR tracking-pixel-sized
   (≤1 KB) image; content = any non-image part OR a standalone image ≥50 KB; everything
@@ -27,3 +27,10 @@ Max ~10 open boxes; the reviewer prunes resolved ones each review turn.
   after evidence) matches your intent. Alternative rejected here: defaulting
   decoration_fanout=False now (a behaviour flip on a guess, contra "observe before
   preventing").
+  — RESOLVED 2026-06-16 (/relay human, user): **ship census as-is** for both calls.
+    (a) the 50 KB / 1 KB cut points are accepted as sane to gather a first distribution;
+    (b) staging confirmed — census now (decoration_fanout=TRUE, no behaviour change),
+    threshold-flip and cross-sender CAS-recurrence only after real-mailbox evidence.
+    Re-checkable: thresholds live in `src/zkm_eml/classify.py:32-38`, default proven by
+    `tests/test_classify.py::test_decoration_fans_out_by_default`. A future review reopens
+    this only if the first census distribution argues for different cut points.
