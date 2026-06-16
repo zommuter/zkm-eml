@@ -27,3 +27,7 @@ reviewer (claude-opus-4-8, fable-standin, relay-loop): verified REVIEW_ME e14b/d
 ## 2026-06-16 10:23 — strong-execute (claude-opus-4-8, fable-standin, relay-loop)
 
 C5 ff0f: M1 attachment classification census mode (decoration|content|unknown in frontmatter+sidecars, decoration_fanout gate default-on), suite 200 green
+
+## 2026-06-16 19:57 — reviewer (claude-opus-4-8, relay-loop)
+
+review 20260616-1957: 1 commit (b2a7e42, REVIEW_ME ff0f human-resolve, docs-only) audited clean; gaming-scan empty; classify.py thresholds (50KB/1KB, lines 32-38) match REVIEW_ME doc + 13 ff0f tests green; suite 200 green; verified ff0f genuinely closed. Fixes: TODO.md e662 summary de-staled (ff0f now closed, not open); contract pointer v3→v4. routine_open=0, no open ROADMAP items. No reverse-handoff additions.
