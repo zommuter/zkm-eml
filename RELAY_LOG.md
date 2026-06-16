@@ -31,3 +31,7 @@ C5 ff0f: M1 attachment classification census mode (decoration|content|unknown in
 ## 2026-06-16 19:57 — reviewer (claude-opus-4-8, relay-loop)
 
 review 20260616-1957: 1 commit (b2a7e42, REVIEW_ME ff0f human-resolve, docs-only) audited clean; gaming-scan empty; classify.py thresholds (50KB/1KB, lines 32-38) match REVIEW_ME doc + 13 ff0f tests green; suite 200 green; verified ff0f genuinely closed. Fixes: TODO.md e662 summary de-staled (ff0f now closed, not open); contract pointer v3→v4. routine_open=0, no open ROADMAP items. No reverse-handoff additions.
+
+## 2026-06-16 20:55 — reviewer (claude-opus-4-8, fable-standin, relay-loop)
+
+review zkm-eml: audited b2a7e42 (ff0f human-resolve, docs-only) clean, suite 200 green, ff0f verified genuine; de-staled TODO e662 + contract pointer v3->v4; routine_open=0
