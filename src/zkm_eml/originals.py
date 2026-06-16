@@ -15,6 +15,7 @@ from zkm.cas import write_object
 from zkm.hashing import git_blob_sha1_bytes
 from zkm.sidecar import merge_producer
 
+from .classify import classify_attachment
 from .naming import date_shard
 from .parse import ParsedAttachment, ParsedMessage
 
@@ -134,6 +135,7 @@ def _write_att_sidecar(
         "size": att.size,
         "sha256": att.sha256,
         "object": f"mail/_objects/{obj_rel}",
+        "classification": classify_attachment(att),
     }
     write_atomic(sidecar_path, json.dumps(data, indent=2))
 
