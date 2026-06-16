@@ -7,6 +7,7 @@ from pathlib import Path
 
 import frontmatter
 
+from .classify import classify_attachment
 from .parse import ParsedAttachment, ParsedMessage
 
 PLUGIN_NAME = "eml"
@@ -113,6 +114,7 @@ def _att_entry(att: ParsedAttachment, rel_path: str) -> dict:
         "object": f"mail/_objects/{sha[:2]}/{sha[2:]}",
         "inline": att.is_inline,
         "cid_referenced": att.referenced_in_html,
+        "classification": classify_attachment(att),
     }
     if att.filename_raw and att.filename_raw != att.filename:
         entry["filename_raw"] = att.filename_raw

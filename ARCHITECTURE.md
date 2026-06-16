@@ -158,3 +158,25 @@ multi-producer), every rewrite path must preserve foreign keys (amender-written
 (`attachments`). `reprocess()` currently violates this (drops both) — red-tested as
 roadmap id:9255. Fix direction: merge previous frontmatter for keys the writer does
 not own, rather than teaching every caller to thread every key through.
+
+## 15. Attachment classification is census-first (M1, id:ff0f)
+
+**Decision**: every attachment is labelled `classification: decoration | content |
+unknown` (a pure function of single-message metadata in `classify.py`), threaded into
+frontmatter `attachments[]` and both sidecars. Inbox fan-out for `decoration` is gated
+by `decoration_fanout`, which **defaults to True** — i.e. census mode changes NO
+behaviour; it only emits labels so a real mailbox's distribution can be surveyed.
+**Rationale**: the house rule "observe before preventing" — misclassification costs are
+asymmetric (hiding a real inline photo from inbox fan-out is worse than fanning out a
+logo), and the signal base rates (what fraction of inline images are logos vs photos,
+how often the same logo CAS object recurs across senders) are unknown until measured.
+Shipping the gate defaulted-off would flip behaviour on a guess. The classifier is
+deliberately loose: only the two clear cases (small inline cid image → decoration;
+non-image or large standalone image → content) are decided; everything mid-size stays
+`unknown` so the census bucket that needs human eyes stays visible.
+**Deferred to a later threshold-flip turn** (needs census evidence first): cross-sender
+CAS-recurrence signal (same logo object seen from N senders ⇒ decoration), alt-text /
+tracking-domain heuristics, and any flip of `decoration_fanout` default. See REVIEW_ME.md.
+**Rejected**: defaulting `decoration_fanout=False` now (behaviour flip on speculation);
+deleting decoration CAS objects (the round-trip/dedup guarantee in §6 is unconditional —
+gating only suppresses the inbox *symlink*, never the stored payload).

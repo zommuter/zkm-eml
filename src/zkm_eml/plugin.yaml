@@ -55,3 +55,7 @@ config:
     required: false
     default: keep
     description: "What to do when a source mail is deleted between runs (git-backed sources only). Options: keep (default — preserve .md unchanged), log (preserve + stderr notice), purge (remove .md; run 'zkm gc' afterwards to clean originals), archive (mark source_deleted: true in frontmatter)."
+  decoration_fanout:
+    required: false
+    default: true
+    description: "M1 census mode: whether decoration-classified attachments (small inline cid logos/banners, tracking pixels) fan out to inbox/. Default true (unchanged — census gathers the decoration|content|unknown distribution in frontmatter+sidecars before any default flips). Set false to suppress decoration inbox symlinks (CAS storage is unaffected; nothing is lost)."

@@ -114,7 +114,7 @@ to upstream) is checked by the orchestrator, not by you.
     reprocess, and hook sections — only the config mechanism and layout examples are
     stale.
 
-- [ ] M1: decoration vs inline-photo attachment classification [HARD — strong model] <!-- id:ff0f -->
+- [x] M1: decoration vs inline-photo attachment classification [HARD — strong model] <!-- id:ff0f -->
   - **Why HARD**: heuristic design with unknown base rates — signals (payload size,
     same-CAS-object recurrence across senders, cid-referenced-but-tiny, alt-text,
     tracking-pixel dimensions) need evidence from a real mailbox before thresholds
@@ -125,6 +125,20 @@ to upstream) is checked by the orchestrator, not by you.
     `classification: decoration|content|unknown` field in frontmatter + sidecar;
     inbox fan-out policy for `decoration` is config-gated; a logging/census mode
     ships FIRST to gather distribution evidence before any default flips.
+  - **Done** (2026-06-16, census mode): `src/zkm_eml/classify.py` —
+    `classify_attachment(att)` pure function (decoration = small ≤50 KB inline cid
+    image or ≤1 KB tracking-pixel image; content = non-image part or standalone image
+    ≥50 KB; unknown = the deliberate catch-all). Label threaded into frontmatter
+    `attachments[].classification`, per-message sidecar, and (via _att_entry) the
+    convert path. New `decoration_fanout` config key (declared in both plugin.yaml
+    copies) gates decoration inbox fan-out but **defaults TRUE — no behaviour flip**;
+    census gathers the distribution first. CAS storage is never affected by the gate.
+    13 tests in `tests/test_classify.py` (`# roadmap:ff0f`), full suite 200 green,
+    ruff clean. ARCHITECTURE.md §15 records the census-first rationale; REVIEW_ME has
+    the threshold/staging judgment call. DEFERRED to a later evidence-backed turn:
+    cross-sender CAS-recurrence signal, alt-text/tracking-domain heuristics, and any
+    flip of the `decoration_fanout` default.
+  - **Done-check**: `uv run pytest tests/test_classify.py`
 
 ## Deferred (gated — do not start)
 

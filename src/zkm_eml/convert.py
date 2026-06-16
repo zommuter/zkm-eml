@@ -10,6 +10,7 @@ import re
 import sys
 from pathlib import Path
 
+from zkm_eml.classify import classify_attachment
 from zkm_eml.frontmatter import write_message_md
 from zkm_eml.naming import date_shard, message_slug, slugify, thread_stub, unique_path
 from zkm.cas import write_object
@@ -41,6 +42,10 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
     attachment_inbox = bool(config.get("attachment_inbox", True))
     quote_strip = bool(config.get("quote_strip", True))
     slug_ascii = bool(config.get("slug_ascii", False))
+    # M1 census mode: decoration attachments still fan out by default (no
+    # behaviour flip). Setting this False suppresses inbox fan-out for
+    # decoration-classified attachments — CAS storage is unaffected.
+    decoration_fanout = bool(config.get("decoration_fanout", True))
 
     limit_recent = int(config.get("limit_recent", 0) or 0)
 
@@ -154,6 +159,8 @@ def convert(store_path: Path, config: dict, *, progress=None) -> list[Path]:
                     for att, _ in attachment_pairs:
                         if att.is_signature_part:
                             continue  # signature leaves are CAS-preserved but never fan-out to inbox
+                        if not decoration_fanout and classify_attachment(att) == "decoration":
+                            continue  # M1: decoration gated out of inbox (still CAS-preserved)
                         try:
                             symlink_with_sidecar(
                                 cas_object=write_object(store_path, "mail", att.payload),
