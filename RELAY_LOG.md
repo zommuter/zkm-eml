@@ -35,3 +35,7 @@ review 20260616-1957: 1 commit (b2a7e42, REVIEW_ME ff0f human-resolve, docs-only
 ## 2026-06-16 20:55 — reviewer (claude-opus-4-8, fable-standin, relay-loop)
 
 review zkm-eml: audited b2a7e42 (ff0f human-resolve, docs-only) clean, suite 200 green, ff0f verified genuine; de-staled TODO e662 + contract pointer v3->v4; routine_open=0
+
+## 2026-06-22 21:26 — maintenance (manual, uv.lock cascade)
+
+uv.lock cascade refresh to zkm 0.16.0 — mechanical version-pin only (id:bae5), audit-exempt class (no code/spec change).
