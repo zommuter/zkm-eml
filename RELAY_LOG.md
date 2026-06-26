@@ -39,3 +39,7 @@ review zkm-eml: audited b2a7e42 (ff0f human-resolve, docs-only) clean, suite 200
 ## 2026-06-22 21:26 — maintenance (manual, uv.lock cascade)
 
 uv.lock cascade refresh to zkm 0.16.0 — mechanical version-pin only (id:bae5), audit-exempt class (no code/spec change).
+
+## 2026-06-26 10:02 — reviewer (claude-opus-4-8, fable-standin, relay-loop)
+
+review: TODO conformance prose-relocation (id:3441/c095) verified safe — no code/tests touched, all ROADMAP items closed, ledgers conformant
