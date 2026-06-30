@@ -43,3 +43,7 @@ uv.lock cascade refresh to zkm 0.16.0 — mechanical version-pin only (id:bae5),
 ## 2026-06-26 10:02 — reviewer (claude-opus-4-8, fable-standin, relay-loop)
 
 review: TODO conformance prose-relocation (id:3441/c095) verified safe — no code/tests touched, all ROADMAP items closed, ledgers conformant
+
+## 2026-06-30 12:20 — reviewer (claude-opus-4-8, fable-standin, relay-loop)
+
+review zkm-eml: verified docs-only TODO ledger-move (Option B); gaming/lint/cross-ledger clean; M1/2527 qualified as design/deferred, no ROADMAP change [id:6755,2527,e662]
