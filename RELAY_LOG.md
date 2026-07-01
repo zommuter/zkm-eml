@@ -47,3 +47,7 @@ review: TODO conformance prose-relocation (id:3441/c095) verified safe — no co
 ## 2026-06-30 12:20 — reviewer (claude-opus-4-8, fable-standin, relay-loop)
 
 review zkm-eml: verified docs-only TODO ledger-move (Option B); gaming/lint/cross-ledger clean; M1/2527 qualified as design/deferred, no ROADMAP change [id:6755,2527,e662]
+
+## 2026-07-02 00:18 — reviewer (claude-fable-5, relay-loop)
+
+fable recheck (claude-fable-5): standin verdicts upheld (suite 200 green, gaming-scan empty, d462d10 docs-only confirmed); fixed M4 dup-id 2527→6186 + twinned gated M1 remainder id:6755 into ROADMAP deferred (unpromoted-scan now clean), contract pointer v4→v6, pruned 3 resolved REVIEW_ME boxes; routine_open=0 [id:6755,6186,e662,ff0f]
