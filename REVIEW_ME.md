@@ -3,34 +3,8 @@
 Judgment calls encoded in red tests — confirm or correct the interpretation.
 Max ~10 open boxes; the reviewer prunes resolved ones each review turn.
 
-- [x] tests/test_naming.py::test_slugify_ascii_fold_when_env_set (roadmap:e14b) — the
-  test exercises the retired `EML_SLUG_ASCII` env mechanism. Interpretation: rewrite
-  to the parameter contract (`slugify(s, slug_ascii=True)`), keeping NFKD-fold
-  coverage ("Grüße" → "grue..."). Alternative: delete the test (coverage loss) or
-  reintroduce an env override (contradicts "replace means delete"). — confirmed by user 2026-06-15 (review_me batch triage)
-
-- [x] tests/test_docs.py::test_readme_no_retired_env_config (roadmap:d206) — strict
-  reading: NO `EML_*` env var may appear anywhere in README, even in a historical
-  note. If you want a "migrating from ≤v0.9" appendix mentioning the old names,
-  loosen the test to scan only fenced config examples. — confirmed by user 2026-06-15 (review_me batch triage)
-
-- [x] tests/test_classify.py (roadmap:ff0f) — M1 attachment classification thresholds
-  are HEURISTIC, not yet evidence-backed. The shipped interpretation (census mode):
-  decoration = small (≤50 KB) inline cid-referenced image OR tracking-pixel-sized
-  (≤1 KB) image; content = any non-image part OR a standalone image ≥50 KB; everything
-  else (mid-size inline images) = unknown. `decoration_fanout` defaults TRUE so census
-  changes no behaviour. Two judgment calls for you: (a) are these byte thresholds
-  sane to gather a first distribution, or do you want different cut points before the
-  census runs on a real mailbox? (b) the deferred cross-sender CAS-recurrence signal
-  (same logo object from N senders ⇒ decoration) and any flip of the fanout default
-  are explicitly NOT in this turn — confirm that staging (census now, threshold-flip
-  after evidence) matches your intent. Alternative rejected here: defaulting
-  decoration_fanout=False now (a behaviour flip on a guess, contra "observe before
-  preventing").
-  — RESOLVED 2026-06-16 (/relay human, user): **ship census as-is** for both calls.
-    (a) the 50 KB / 1 KB cut points are accepted as sane to gather a first distribution;
-    (b) staging confirmed — census now (decoration_fanout=TRUE, no behaviour change),
-    threshold-flip and cross-sender CAS-recurrence only after real-mailbox evidence.
-    Re-checkable: thresholds live in `src/zkm_eml/classify.py:32-38`, default proven by
-    `tests/test_classify.py::test_decoration_fans_out_by_default`. A future review reopens
-    this only if the first census distribution argues for different cut points.
+(No open boxes. Pruned 2026-07-02: e14b slugify-rewrite + d206 README-strictness
+confirmations of 2026-06-15, and the ff0f census-threshold resolution of 2026-06-16
+— durable records live in RELAY_LOG.md, ROADMAP id:ff0f Done note, and
+ARCHITECTURE.md §15. The ff0f reopen trigger stands: revisit the 50 KB / 1 KB cut
+points only if the first real-mailbox census distribution argues for different ones.)
