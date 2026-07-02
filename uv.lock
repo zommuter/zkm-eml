@@ -568,12 +568,14 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+magic = [
+    { name = "python-magic" },
+]
+
+[package.dev-dependencies]
 dev = [
     { name = "pytest" },
     { name = "ruff" },
-]
-magic = [
-    { name = "python-magic" },
 ]
 
 [package.metadata]
@@ -581,10 +583,14 @@ requires-dist = [
     { name = "charset-normalizer", specifier = ">=3.3" },
     { name = "ftfy", specifier = ">=6.2" },
     { name = "markdownify", specifier = ">=0.13" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "python-frontmatter", specifier = ">=1.1" },
     { name = "python-magic", marker = "extra == 'magic'", specifier = ">=0.4" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
     { name = "zkm", editable = "../../" },
 ]
-provides-extras = ["magic", "dev"]
+provides-extras = ["magic"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8" },
+    { name = "ruff", specifier = ">=0.4" },
+]

@@ -45,6 +45,8 @@ eml = "zkm_eml"
 magic = [
     "python-magic>=0.4",
 ]
+
+[dependency-groups]
 dev = [
     "pytest>=8",
     "ruff>=0.4",
