@@ -140,6 +140,21 @@ to upstream) is checked by the orchestrator, not by you.
     flip of the `decoration_fanout` default.
   - **Done-check**: `uv run pytest tests/test_classify.py`
 
+- [x] Dev tooling installable by bare `uv sync` [ROUTINE] <!-- id:a3fd -->
+  - **Acceptance**: from a fresh clone, `uv sync` (no flags) followed by
+    `uv run pytest` runs the suite green — dev deps (`pytest`, `ruff`) live in
+    `[dependency-groups]` (uv auto-syncs the `dev` group), not
+    `[project.optional-dependencies]` (extras are NOT auto-installed, so the
+    documented done-checks fell through to system pytest on Python 3.14 and
+    died with 9 collection errors). Matches the zkm parent convention.
+  - **Tests**: `tests/test_packaging.py::test_dev_deps_declared_as_dependency_group`,
+    `::test_dev_extra_not_duplicated_in_optional_dependencies` (each `# roadmap:a3fd`)
+  - **Done** (2026-07-02, review turn): pyproject `dev` extra → `[dependency-groups]`,
+    `uv.lock` regenerated (keeps relative `../../` editable path); fresh-clone verify
+    (bare `uv sync && uv run pytest`) = 202 passed, ruff clean. Fleet note: 16 sibling
+    plugins share the defect — routed to central zkm via the shared inbox.
+  - **Done-check**: `uv run pytest tests/test_packaging.py`
+
 ## Deferred (gated — do not start)
 
 - M1 remainder: evidence-backed classification phase — cross-sender CAS-recurrence
