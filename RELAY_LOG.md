@@ -51,3 +51,7 @@ review zkm-eml: verified docs-only TODO ledger-move (Option B); gaming/lint/cros
 ## 2026-07-02 00:18 — reviewer (claude-fable-5, relay-loop)
 
 fable recheck (claude-fable-5): standin verdicts upheld (suite 200 green, gaming-scan empty, d462d10 docs-only confirmed); fixed M4 dup-id 2527→6186 + twinned gated M1 remainder id:6755 into ROADMAP deferred (unpromoted-scan now clean), contract pointer v4→v6, pruned 3 resolved REVIEW_ME boxes; routine_open=0 [id:6755,6186,e662,ff0f]
+
+## 2026-07-02 08:46 — reviewer (claude-fable-5, relay-loop)
+
+SPURIOUS dispatch (3rd this run: path-override drop, sig empty, window since relay-ckpt-20260702-0018 EMPTY — root cause already routed:0537/3715); audit clean (gaming-scan/doctor/lint 0 issues), suite green; found+fixed id:a3fd dev-deps→[dependency-groups] (bare uv sync now installs pytest, fresh-clone verify 202 passed), 16-plugin fleet sweep routed:97a9→zkm; routine_open=0 [id:a3fd]
