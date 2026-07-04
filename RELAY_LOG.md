@@ -55,3 +55,7 @@ fable recheck (claude-fable-5): standin verdicts upheld (suite 200 green, gaming
 ## 2026-07-02 08:46 — reviewer (claude-fable-5, relay-loop)
 
 SPURIOUS dispatch (3rd this run: path-override drop, sig empty, window since relay-ckpt-20260702-0018 EMPTY — root cause already routed:0537/3715); audit clean (gaming-scan/doctor/lint 0 issues), suite green; found+fixed id:a3fd dev-deps→[dependency-groups] (bare uv sync now installs pytest, fresh-clone verify 202 passed), 16-plugin fleet sweep routed:97a9→zkm; routine_open=0 [id:a3fd]
+
+## 2026-07-04 20:19 — reviewer (claude-opus-4-8, fable-standin, relay-loop)
+
+review zkm-eml: SPURIOUS dispatch (empty window relay-ckpt-20260702-0846..HEAD; root cause routed:0537/3715); suite 202 green, gaming-scan/doctor/lint all clean, 0 open ROADMAP/REVIEW_ME; routine_open=0
