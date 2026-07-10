@@ -59,3 +59,7 @@ SPURIOUS dispatch (3rd this run: path-override drop, sig empty, window since rel
 ## 2026-07-04 20:19 — reviewer (claude-opus-4-8, fable-standin, relay-loop)
 
 review zkm-eml: SPURIOUS dispatch (empty window relay-ckpt-20260702-0846..HEAD; root cause routed:0537/3715); suite 202 green, gaming-scan/doctor/lint all clean, 0 open ROADMAP/REVIEW_ME; routine_open=0
+
+## 2026-07-10 11:31 — reviewer (claude-opus-4-8, fable-standin, relay-loop)
+
+Review zkm-eml since relay-ckpt-20260704-2019: bookkeeping-only window; suite 202/0 green, gaming-scan+orphan-scans+roadmap-lint+relay-doctor all clean; 0 open ROUTINE (2 deferred/gated), no reopens. [id:7674,e14b,9bf0,9255,f583,d206,ff0f,a3fd]
