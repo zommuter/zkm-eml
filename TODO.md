@@ -5,6 +5,5 @@ This is the work ledger for zkm-eml (Option B, decided 2026-06-30 — `~/src/zkm
 ## Current
 
 - [ ] Relay: 0 open ROADMAP items; 2 deferred/gated (id:6186, id:6755); 7 [ROUTINE] + 1 [HARD] (id:ff0f) closed <!-- id:e662 -->
-- [x] Packaging: dev deps → `[dependency-groups]` so bare `uv sync` installs pytest/ruff and the documented `uv run pytest` done-check works from a fresh clone (fixed in review turn) on 2026-07-02 <!-- id:a3fd -->
 - [ ] **M1 remainder.** Decoration classification, evidence-backed phase — census mode shipped (ROADMAP id:ff0f closed: `classification: decoration|content|unknown` in frontmatter+sidecars, `decoration_fanout` gate default-TRUE). Remaining: cross-sender CAS-recurrence signal (same logo object from N senders), alt-text/tracking-domain heuristics, and any flip of the `decoration_fanout` default. **Gate**: run the census on a real mailbox and read the first distribution before touching thresholds or the default ("observe before preventing"). <!-- id:6755 -->
 - [ ] **M4.** Drafts — optional "follow draft updates" mode (Message-ID/content changes on each save). YAGNI for now; gated in ROADMAP (same id). <!-- id:6186 -->
