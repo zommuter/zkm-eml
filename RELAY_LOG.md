@@ -63,3 +63,7 @@ review zkm-eml: SPURIOUS dispatch (empty window relay-ckpt-20260702-0846..HEAD; 
 ## 2026-07-10 11:31 — reviewer (claude-opus-4-8, fable-standin, relay-loop)
 
 Review zkm-eml since relay-ckpt-20260704-2019: bookkeeping-only window; suite 202/0 green, gaming-scan+orphan-scans+roadmap-lint+relay-doctor all clean; 0 open ROUTINE (2 deferred/gated), no reopens. [id:7674,e14b,9bf0,9255,f583,d206,ff0f,a3fd]
+
+## 2026-07-11 13:45 — reviewer (claude-opus-4-8, fable-standin, relay-loop)
+
+review: window = 2 ledger-only chores (archive + lane migration), no code; suite 202 green (main checkout), gaming-scan clean; fixed e662 mis-hoisted [ROUTINE] tag; 0 open ROADMAP items [id:e662]
